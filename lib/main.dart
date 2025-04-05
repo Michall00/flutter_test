@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:onnxruntime_flutter/onnxruntime_flutter.dart';
+import 'package:onnxruntime/onnxruntime.dart';
 
 class ImagePickerPage extends StatefulWidget {
   @override
@@ -55,18 +55,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       elementType: TensorElementType.uint8,
     );
 
-    final session = await OrtEnvironment.instance.createSession(
-      'assets/migan_pipeline_v2.onnx',
-    );
+    final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
+    final session = OrtSession.fromBuffer(modelData.buffer.asUint8List());
 
-    final outputs = await session.run(
-      {'image': imageTensor, 'mask': maskTensor},
-    );
-
+    final outputs = await session.run({'image': imageTensor, 'mask': maskTensor});
     final output = outputs.first.value as List<int>;
     final outputImage = img.Image.fromBytes(width, height, Uint8List.fromList(output), format: img.Format.rgb);
 
-    // Pokaż obraz wynikowy
     final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
     setState(() {
       _imageFile = File.fromRawPath(resultBytes);
