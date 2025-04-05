@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   image_picker: ^1.0.4
-  onnxruntime: ^1.17.0
+  onnxruntime: ^1.4.1
   image: ^4.1.3
 
 
