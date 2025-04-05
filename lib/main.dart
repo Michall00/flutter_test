@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,7 +38,14 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final maskImage = img.Image(width, height);
     img.fill(maskImage, img.getColor(255, 255, 255));
     for (final point in _points) {
-      img.drawCircle(maskImage, point.dx.toInt(), point.dy.toInt(), 15, img.getColor(0, 0, 0), thickness: -1);
+      // img.drawCircle(maskImage, point.dx.toInt(), point.dy.toInt(), 15, img.getColor(0, 0, 0), thickness: -1);
+      img.drawCircle(
+      maskImage,
+      center: Point(point.dx.toInt(), point.dy.toInt()),
+      radius: 15,
+      color: img.getColor(0, 0, 0),
+      thickness: -1,
+    );
     }
 
     final inputImage = img.copyRotate(originalImage, 0);
