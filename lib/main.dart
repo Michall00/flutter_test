@@ -134,20 +134,22 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final inputImage = img.copyRotate(originalImage, angle: 0);
     final imageBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
     final maskBytes = Uint8List.fromList(
-      maskImage
-          .getBytes()
-          .asMap()
-          .entries
-          .where((entry) => entry.key % 4 == 0)
-          .map((entry) => entry.value)
-          .toList(),
+      List.generate(width * height, (i) {
+        final pixel = maskImage.getPixel(i % width, i ~/ width);
+        final luminance = img.getLuminanceRgb(
+          pixel.r.toInt(),
+          pixel.g.toInt(),
+          pixel.b.toInt(),
+        );
+        return luminance;
+      }),
     );
     
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Inicjalizacja środowiska ONNX...'),
-        duration: Duration(seconds: 1),
+        content: Text('Inicjalizacja środowiska ONNX...\nimageBytes: ${imageBytes.length} (oczekiwane: ${width * height * 3})\nmaskBytes: ${maskBytes.length} (oczekiwane: ${width * height})'),
+        duration: Duration(seconds: 3),
       ),
     );
     OrtEnv.instance.init();
@@ -160,6 +162,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, height, width, 3]);
     final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, height, width, 1]);
 
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Uruchomienie ONNX.'),
+        duration: Duration(seconds: 1),
+      ),
+    );
 
     final options = OrtRunOptions();
     final outputs = await session.run(
