@@ -39,13 +39,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   void _startInpaintingWithSnackBar() async {
     final messenger = ScaffoldMessenger.of(context);
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('⏳ Przetwarzam inpainting...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
     try {
       await _runInpainting();
 
@@ -80,8 +73,22 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   }
 
   Future<void> _runInpainting() async {
-    if (_imageFile == null) return;
+    if (_imageFile == null) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Brak pliku obrazu!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Wczytenie pliku do inpaintingu...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
     final bytes = await _imageFile!.readAsBytes();
     final originalImage = img.decodeImage(bytes)!;
     final width = originalImage.width;
@@ -98,18 +105,31 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       }
     }
 
-    for (final point in _points) {
-      // img.drawCircle(maskImage, point.dx.toInt(), point.dy.toInt(), 15, img.getColor(0, 0, 0), thickness: -1);
-      img.drawCircle(
-      maskImage,
-      // center: Point(point.dx.toInt(), point.dy.toInt()),
-      x: point.dx.toInt(),
-      y: point.dy.toInt(),
-      radius: 15,
-      color: black
+    final pointsToDraw = _points.where((p) => p != Offset.infinite).toList();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Liczba punktów: ${pointsToDraw.length}'),
+        duration: Duration(seconds: 1),
+      ),
     );
+
+    for (final point in _points.where((p) => p != Offset.infinite)) {
+      img.drawCircle(
+        maskImage,
+        x: point.dx.toInt(),
+        y: point.dy.toInt(),
+        radius: 15,
+        color: black,
+      );
     }
 
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Generowanie tensorów wejściowych...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
     final inputImage = img.copyRotate(originalImage, angle: 0);
     final imageBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
     final maskBytes = Uint8List.fromList(
@@ -122,6 +142,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           .toList(),
     );
     
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Inicjalizacja środowiska ONNX...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
     OrtEnv.instance.init();
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
     final session = OrtSession.fromBuffer(
@@ -139,6 +166,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       {'image': imageTensor, 'mask': maskTensor},
       ['result'],
     );
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Wynik ONNX uzyskany.'),
+        duration: Duration(seconds: 1),
+      ),
+    );
     final output = outputs.first?.value as Uint8List;
     final outputImage = img.Image.fromBytes(
       width: width,
@@ -147,11 +181,34 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       order: img.ChannelOrder.rgb,
     );
 
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Kodowanie wyniku jako JPG...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
     final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Aktualizacja obrazu w UI...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+
     setState(() {
       _imageFile = File.fromRawPath(resultBytes);
       _points.clear();
     });
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Inpainting zakończony sukcesem!'),
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
 
   @override
