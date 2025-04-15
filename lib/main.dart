@@ -35,41 +35,64 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final width = originalImage.width;
     final height = originalImage.height;
 
-    final maskImage = img.Image(width, height);
-    img.fill(maskImage, img.getColor(255, 255, 255));
+    final maskImage = img.Image(width: width, height: height);
+
+    final white = img.ColorRgb8(255, 255, 255);
+    final black = img.ColorRgb8(0, 0, 0);
+
+    for (int y = 0; y < maskImage.height; y++) {
+      for (int x = 0; x < maskImage.width; x++) {
+        maskImage.setPixel(x, y, white);
+      }
+    }
+
     for (final point in _points) {
       // img.drawCircle(maskImage, point.dx.toInt(), point.dy.toInt(), 15, img.getColor(0, 0, 0), thickness: -1);
       img.drawCircle(
       maskImage,
-      center: Point(point.dx.toInt(), point.dy.toInt()),
+      // center: Point(point.dx.toInt(), point.dy.toInt()),
+      x: point.dx.toInt(),
+      y: point.dy.toInt(),
       radius: 15,
-      color: img.getColor(0, 0, 0),
-      thickness: -1,
+      color: black
     );
     }
 
-    final inputImage = img.copyRotate(originalImage, 0);
-    final imageBytes = inputImage.getBytes(format: img.Format.rgb);
-    final maskBytes = maskImage.getBytes(format: img.Format.luminance);
-
-    final imageTensor = Tensor.fromList(
-      imageBytes,
-      shape: [1, 3, height, width],
-      elementType: TensorElementType.uint8,
-    );
-
-    final maskTensor = Tensor.fromList(
-      maskBytes,
-      shape: [1, 1, height, width],
-      elementType: TensorElementType.uint8,
+    final inputImage = img.copyRotate(originalImage, angle: 0);
+    final imageBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
+    final maskBytes = Uint8List.fromList(
+      maskImage
+          .getBytes()
+          .asMap()
+          .entries
+          .where((entry) => entry.key % 4 == 0)
+          .map((entry) => entry.value)
+          .toList(),
     );
 
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
-    final session = OrtSession.fromBuffer(modelData.buffer.asUint8List());
+    final session = OrtSession.fromBuffer(
+      modelData.buffer.asUint8List(),
+      OrtSessionOptions(),
+    );
 
-    final outputs = await session.run({'image': imageTensor, 'mask': maskTensor});
-    final output = outputs.first.value as List<int>;
-    final outputImage = img.Image.fromBytes(width, height, Uint8List.fromList(output), format: img.Format.rgb);
+    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, height, width, 3]);
+    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, height, width, 1]);
+
+
+    final options = OrtRunOptions();
+    final outputs = await session.run(
+      options,
+      {'image': imageTensor, 'mask': maskTensor},
+      ['result'],
+    );
+    final output = outputs.first?.value as Uint8List;
+    final outputImage = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: output.buffer,
+      order: img.ChannelOrder.rgb,
+    );
 
     final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
     setState(() {
