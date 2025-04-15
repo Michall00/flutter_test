@@ -73,6 +73,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   }
 
   Future<void> _runInpainting() async {
+    final messenger = ScaffoldMessenger.of(context);
     if (_imageFile == null) {
       messenger.showSnackBar(
         SnackBar(
