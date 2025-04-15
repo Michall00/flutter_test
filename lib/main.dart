@@ -36,6 +36,38 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   File? _imageFile;
   final List<Offset> _points = [];
 
+  void _startInpaintingWithSnackBar() async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('⏳ Przetwarzam inpainting...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await _runInpainting();
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('✅ Inpainting zakończony!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e, stacktrace) {
+      debugPrint("Błąd inpaintingu: $e");
+      debugPrint("Stacktrace:\n$stacktrace");
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ Błąd: $e'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -153,7 +185,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           ),
           SizedBox(height: 16),
           FloatingActionButton(
-            onPressed: _runInpainting,
+            onPressed: _startInpaintingWithSnackBar,
             heroTag: 'inpaint',
             child: Icon(Icons.auto_fix_high),
           ),
