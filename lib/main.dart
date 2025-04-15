@@ -141,7 +141,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           pixel.g.toInt(),
           pixel.b.toInt(),
         );
-        return luminance;
+        return luminance.toInt() == 0 ? 1 : 0;
       }),
     );
     
