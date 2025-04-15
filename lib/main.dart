@@ -7,6 +7,26 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'MI-GAN Inpainting',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+      ),
+      home: ImagePickerPage(),
+    );
+  }
+}
+
 class ImagePickerPage extends StatefulWidget {
   @override
   State<ImagePickerPage> createState() => _ImagePickerPageState();
