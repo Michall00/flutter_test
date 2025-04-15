@@ -89,7 +89,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           .map((entry) => entry.value)
           .toList(),
     );
-
+    
+    OrtEnv.instance.init();
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
     final session = OrtSession.fromBuffer(
       modelData.buffer.asUint8List(),
