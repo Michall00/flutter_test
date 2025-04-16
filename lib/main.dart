@@ -194,40 +194,77 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
-    final output = outputs.first?.value as Uint8List;
-    final outputImage = img.Image.fromBytes(
-      width: targetWidth,
-      height: targetHeight,
-      bytes: output.buffer,
-      order: img.ChannelOrder.rgb,
-    );
+    final output = outputs.first?.value;
 
+    if (output is Uint8List) {
+      debugPrint("✅ Wynik ONNX to Uint8List (${output.length} bajtów)");
+
+      final outputImage = img.Image.fromBytes(
+        width: targetWidth,
+        height: targetHeight,
+        bytes: output.buffer,
+        order: img.ChannelOrder.rgb,
+      );
+
+      final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
+      debugPrint("📦 Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
+
+      setState(() {
+        _imageFile = File.fromRawPath(resultBytes);
+        _points.clear();
+      });
+    } else if (output is List) {
+      debugPrint("📦 Wynik ONNX to zagnieżdżona lista (List<List<List<List<int>>>>>)");
+
+      final raw = output[0] as List<List<List<int>>>; // [3, H, W]
+      final channels = raw.length;
+      final height = raw[0].length;
+      final width = raw[0][0].length;
+
+      debugPrint("🧠 Rozmiary wyniku: [C=$channels, H=$height, W=$width]");
+
+      final rgbBytes = Uint8List(width * height * 3);
+
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final r = raw[0][y][x];
+          final g = raw[1][y][x];
+          final b = raw[2][y][x];
+          final idx = (y * width + x) * 3;
+          rgbBytes[idx] = r;
+          rgbBytes[idx + 1] = g;
+          rgbBytes[idx + 2] = b;
+        }
+      }
+
+      debugPrint("🎨 Utworzono RGB Uint8List (${rgbBytes.length} bajtów)");
+
+      final outputImage = img.Image.fromBytes(
+        width: width,
+        height: height,
+        bytes: rgbBytes,
+        order: img.ChannelOrder.rgb,
+      );
+
+      final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
+      debugPrint("✅ Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
+
+      setState(() {
+        _imageFile = File.fromRawPath(resultBytes);
+        _points.clear();
+      });
+    } else {
+      debugPrint("❌ Nieznany typ wyniku z ONNX: ${output.runtimeType}");
+      messenger.showSnackBar(
+        SnackBar(content: Text("❌ Błąd: nieobsługiwany typ wyniku ONNX")),
+      );
+      return;
+    }
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Kodowanie wyniku jako JPG...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-    final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Aktualizacja obrazu w UI...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
-
-    setState(() {
-      _imageFile = File.fromRawPath(resultBytes);
-      _points.clear();
-    });
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Inpainting zakończony sukcesem!'),
-        duration: Duration(seconds: 1),
+        content: Text('✅ Inpainting zakończony sukcesem!'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
