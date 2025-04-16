@@ -111,14 +111,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         maskImage.setPixel(x, y, white);
       }
     }
-
-    final pointsToDraw = _points.where((p) => p != Offset.infinite).toList();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Liczba punktów: ${pointsToDraw.length}'),
-        duration: Duration(seconds: 1),
-      ),
-    );
     final scaledPoints = _points
       .where((p) => p != Offset.infinite)
       .map((p) => Offset(
@@ -126,6 +118,14 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
             p.dy * targetHeight / height,
           ))
       .toList();
+
+    final pointsToDraw = scaledPoints.where((p) => p != Offset.infinite).toList();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Liczba punktów: ${pointsToDraw.length}'),
+        duration: Duration(seconds: 1),
+      ),
+    );
 
     for (final point in scaledPoints) {
       img.drawCircle(
@@ -160,7 +160,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       }),
     );
     
-
     messenger.showSnackBar(
       SnackBar(
         content: Text('Inicjalizacja środowiska ONNX...\nimageBytes: ${imageBytes.length} (oczekiwane: ${width * height * 3})\nmaskBytes: ${maskBytes.length} (oczekiwane: ${width * height})'),
