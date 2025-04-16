@@ -209,8 +209,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
       debugPrint("📦 Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
 
+      final tempDir = await Directory.systemTemp.createTemp();
+      final filePath = '${tempDir.path}/output.jpg';
+      final resultFile = await File(filePath).writeAsBytes(resultBytes);
+
       setState(() {
-        _imageFile = File.fromRawPath(resultBytes);
+        _imageFile = resultFile;
         _points.clear();
       });
     } else if (output is List) {
@@ -249,8 +253,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
       debugPrint("✅ Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
 
+      final tempDir = await Directory.systemTemp.createTemp();
+      final filePath = '${tempDir.path}/output.jpg';
+      final resultFile = await File(filePath).writeAsBytes(resultBytes);
+
       setState(() {
-        _imageFile = File.fromRawPath(resultBytes);
+        _imageFile = resultFile;
         _points.clear();
       });
     } else {
