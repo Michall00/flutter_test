@@ -132,7 +132,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       ),
     );
     final inputImage = img.copyRotate(originalImage, angle: 0);
-    final imageBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
+    final interleavedBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
+    final imageBytes = convertInterleavedToNCHW(interleavedBytes, width, height);
+
     final maskBytes = Uint8List.fromList(
       List.generate(width * height, (i) {
         final pixel = maskImage.getPixel(i % width, i ~/ width);
@@ -141,7 +143,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           pixel.g.toInt(),
           pixel.b.toInt(),
         );
-        return luminance.toInt() == 0 ? 1 : 0;
+        return luminance.toInt() == 0 ? 1 : 0; 
       }),
     );
     
@@ -159,8 +161,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       OrtSessionOptions(),
     );
 
-    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, height, width, 3]);
-    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, height, width, 1]);
+    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, 3, height, width]);
+    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, 1, height, width]);
 
     messenger.showSnackBar(
       SnackBar(
@@ -281,4 +283,19 @@ class MaskPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(MaskPainter oldDelegate) => true;
+}
+
+Uint8List convertInterleavedToNCHW(Uint8List rgb, int width, int height) {
+  final total = width * height;
+  final r = Uint8List(total);
+  final g = Uint8List(total);
+  final b = Uint8List(total);
+
+  for (int i = 0; i < total; i++) {
+    r[i] = rgb[i * 3];
+    g[i] = rgb[i * 3 + 1];
+    b[i] = rgb[i * 3 + 2];
+  }
+
+  return Uint8List.fromList([...r, ...g, ...b]);
 }
