@@ -196,8 +196,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     );
     final output = outputs.first?.value as Uint8List;
     final outputImage = img.Image.fromBytes(
-      width: width,
-      height: height,
+      width: targetWidth,
+      height: targetHeight,
       bytes: output.buffer,
       order: img.ChannelOrder.rgb,
     );
