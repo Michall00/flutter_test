@@ -33,8 +33,7 @@ class ImagePickerPage extends StatefulWidget {
 }
 
 class _ImagePickerPageState extends State<ImagePickerPage> {
-  File? _originalImageFile;
-  File? _workingImageFile;
+  File? _imageFile;
   final List<Offset> _points = [];
 
   void _startInpaintingWithSnackBar() async {
@@ -67,7 +66,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       setState(() {
-        _originalImageFile = File(picked.path);
+        _imageFile = File(picked.path);
         _points.clear();
       });
     }
@@ -75,7 +74,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
   Future<void> _runInpainting() async {
     final messenger = ScaffoldMessenger.of(context);
-    if (_originalImageFile == null) {
+    if (_imageFile == null) {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Brak pliku obrazu!'),
@@ -84,8 +83,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       );
       return;
     }
-
-    _workingImageFile = File.fromRawPath(await _originalImageFile!.readAsBytes());
 
     const int targetWidth = 256;
     const int targetHeight = 256;
@@ -96,7 +93,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 2),
       ),
     );
-    final bytes = await _workingImageFile!.readAsBytes();
+    final bytes = await _imageFile!.readAsBytes();
     final originalImage = img.decodeImage(bytes)!;
     final width = originalImage.width;
     final height = originalImage.height;
@@ -221,7 +218,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       final resultFile = await File(filePath).writeAsBytes(resultBytes);
 
       setState(() {
-        _originalImageFile = resultFile;
+        _imageFile = resultFile;
         _points.clear();
       });
     } else if (output is List) {
@@ -270,7 +267,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       final resultFile = await File(filePath).writeAsBytes(resultBytes);
 
       setState(() {
-        _originalImageFile = resultFile;
+        _imageFile = resultFile;
         _points.clear();
       });
     } else {
@@ -293,11 +290,11 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("MI-GAN Inpainting")),
-      body: _originalImageFile == null
+      body: _imageFile == null
           ? Center(child: Text("Brak zdjęcia"))
           : Stack(
               children: [
-                Image.file(_originalImageFile!),
+                Image.file(_imageFile!),
                 GestureDetector(
                   onPanUpdate: (details) {
                     setState(() => _points.add(details.localPosition));
