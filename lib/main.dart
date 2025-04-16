@@ -84,6 +84,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       return;
     }
 
+    const int targetWidth = 256;
+    const int targetHeight = 256;
+
     messenger.showSnackBar(
       SnackBar(
         content: Text('Wczytenie pliku do inpaintingu...'),
@@ -95,7 +98,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final width = originalImage.width;
     final height = originalImage.height;
 
-    final maskImage = img.Image(width: width, height: height);
+    final maskImage = img.Image(width: targetWidth, height: targetHeight);
 
     final white = img.ColorRgb8(255, 255, 255);
     final black = img.ColorRgb8(0, 0, 0);
@@ -113,8 +116,15 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
+    final scaledPoints = _points
+      .where((p) => p != Offset.infinite)
+      .map((p) => Offset(
+            p.dx * targetWidth / width,
+            p.dy * targetHeight / height,
+          ))
+      .toList();
 
-    for (final point in _points.where((p) => p != Offset.infinite)) {
+    for (final point in scaledPoints) {
       img.drawCircle(
         maskImage,
         x: point.dx.toInt(),
@@ -131,13 +141,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
-    final inputImage = img.copyRotate(originalImage, angle: 0);
+    final inputImage = img.copyResize(originalImage, width: targetWidth, height: targetHeight);
     final interleavedBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
-    final imageBytes = convertInterleavedToNCHW(interleavedBytes, width, height);
-
+    
+    final imageBytes = convertInterleavedToNCHW(interleavedBytes, targetWidth, targetHeight);
     final maskBytes = Uint8List.fromList(
-      List.generate(width * height, (i) {
-        final pixel = maskImage.getPixel(i % width, i ~/ width);
+      List.generate(targetWidth * targetHeight, (i) {
+        final pixel = maskImage.getPixel(i % targetWidth, i ~/ targetHeight);
         final luminance = img.getLuminanceRgb(
           pixel.r.toInt(),
           pixel.g.toInt(),
@@ -161,8 +171,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       OrtSessionOptions(),
     );
 
-    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, 3, height, width]);
-    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, 1, height, width]);
+    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, 3, targetHeight, targetWidth]);
+    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, 1, targetHeight, targetWidth]);
 
     messenger.showSnackBar(
       SnackBar(
