@@ -268,20 +268,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                           ),
                     GestureDetector(
                       onPanUpdate: (details) {
-                        final box = imageKey.currentContext?.findRenderObject()
-                            as RenderBox?;
-                        if (box != null) {
-                          final renderSize = box.size;
-                          final scaleX = _imageWidth! / renderSize.width;
-                          final scaleY = _imageHeight! / renderSize.height;
-
-                          final corrected = Offset(
-                            details.localPosition.dx * scaleX,
-                            details.localPosition.dy * scaleY,
-                          );
-
-                          setState(() => _points.add(corrected));
-                        }
+                        setState(() => _points.add(details.localPosition));
                       },
                       onPanEnd: (_) => _points.add(Offset.infinite),
                       child: CustomPaint(
