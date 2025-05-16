@@ -34,6 +34,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   File? _imageFile;
   int? _imageWidth;
   int? _imageHeight;
+  Uint8List? _previewMaskBytes;
   final List<Offset> _points = [];
 
   void _startInpaintingWithSnackBar() async {
@@ -205,6 +206,44 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     });
   }
 
+  void _generateMaskPreview() {
+    if (_imageFile == null || _imageWidth == null || _imageHeight == null)
+      return;
+
+    final original = img.decodeImage(_imageFile!.readAsBytesSync())!;
+    final preview = img.Image.from(original); // kopia
+
+    final mask =
+        img.Image(width: _imageWidth!, height: _imageHeight!, numChannels: 1);
+    mask.getBytes().fillRange(0, _imageWidth! * _imageHeight!, 255);
+
+    for (final point in _points) {
+      if (point == Offset.infinite) continue;
+
+      final x = point.dx.toInt().clamp(0, _imageWidth! - 1);
+      final y = point.dy.toInt().clamp(0, _imageHeight! - 1);
+      img.drawCircle(mask, x: x, y: y, radius: 15, color: img.ColorUint8(0));
+    }
+
+    // Pokoloruj maskę na czerwono jako overlay
+    for (int y = 0; y < mask.height; y++) {
+      for (int x = 0; x < mask.width; x++) {
+        final pixel = mask.getPixel(x, y);
+        final value =
+            pixel.getChannel(img.Channel.luminance); // get the grayscale value
+        if (value == 0) {
+          // półprzezroczysty czerwony
+          preview.setPixelRgba(x, y, 255, 0, 0, 100);
+        }
+      }
+    }
+
+    final bytes = Uint8List.fromList(img.encodeJpg(preview));
+    setState(() {
+      _previewMaskBytes = bytes;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -217,7 +256,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                 height: _imageHeight?.toDouble(),
                 child: Stack(
                   children: [
-                    Image.file(_imageFile!),
+                    _previewMaskBytes != null
+                        ? Image.memory(_previewMaskBytes!)
+                        : Image.file(_imageFile!),
                     GestureDetector(
                       onPanUpdate: (details) {
                         setState(() => _points.add(details.localPosition));
@@ -246,6 +287,11 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
             onPressed: _startInpaintingWithSnackBar,
             heroTag: 'inpaint',
             child: const Icon(Icons.auto_fix_high),
+          ),
+          FloatingActionButton(
+            onPressed: _generateMaskPreview,
+            heroTag: 'preview',
+            child: const Icon(Icons.visibility),
           ),
         ],
       ),
