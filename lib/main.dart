@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -34,6 +32,8 @@ class ImagePickerPage extends StatefulWidget {
 
 class _ImagePickerPageState extends State<ImagePickerPage> {
   File? _imageFile;
+  int? _imageWidth;
+  int? _imageHeight;
   final List<Offset> _points = [];
 
   void _startInpaintingWithSnackBar() async {
@@ -43,7 +43,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       await _runInpainting();
 
       messenger.showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('✅ Inpainting zakończony!'),
           duration: Duration(seconds: 2),
         ),
@@ -55,7 +55,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('❌ Błąd: $e'),
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -65,8 +65,21 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
+      final file = File(picked.path);
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+
+      if (decoded == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Nie udało się odczytać obrazu')),
+        );
+        return;
+      }
+
       setState(() {
-        _imageFile = File(picked.path);
+        _imageFile = file;
+        _imageWidth = decoded.width;
+        _imageHeight = decoded.height;
         _points.clear();
       });
     }
@@ -76,7 +89,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final messenger = ScaffoldMessenger.of(context);
     if (_imageFile == null) {
       messenger.showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Brak pliku obrazu!'),
           duration: Duration(seconds: 2),
         ),
@@ -84,11 +97,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       return;
     }
 
-    const int targetWidth = 256;
-    const int targetHeight = 256;
-
     messenger.showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('Wczytenie pliku do inpaintingu...'),
         duration: Duration(seconds: 2),
       ),
@@ -98,71 +108,38 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final width = originalImage.width;
     final height = originalImage.height;
 
-    final maskImage = img.Image(width: targetWidth, height: targetHeight);
+    final maskImage = img.Image(width: width, height: height, numChannels: 1);
 
-    final white = img.ColorRgb8(255, 255, 255);
-    final black = img.ColorRgb8(0, 0, 0);
-
-    for (int y = 0; y < maskImage.height; y++) {
-      for (int x = 0; x < maskImage.width; x++) {
-        maskImage.setPixel(x, y, white);
-      }
-    }
-    final scaledPoints = _points
-      .where((p) => p != Offset.infinite)
-      .map((p) => Offset(
-            p.dx * targetWidth / width,
-            p.dy * targetHeight / height,
-          ))
-      .toList();
-
-    final pointsToDraw = scaledPoints.where((p) => p != Offset.infinite).toList();
+    maskImage.getBytes().fillRange(0, width * height, 255);
+    final pointsToDraw = _points.where((p) => p != Offset.infinite).toList();
     messenger.showSnackBar(
       SnackBar(
         content: Text('Liczba punktów: ${pointsToDraw.length}'),
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       ),
     );
 
-    for (final point in scaledPoints) {
+    for (final point in _points) {
+      if (point == Offset.infinite) continue;
+
       img.drawCircle(
         maskImage,
         x: point.dx.toInt(),
         y: point.dy.toInt(),
         radius: 15,
-        color: black,
+        color: img.ColorUint8(0),
       );
     }
 
-
     messenger.showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('Generowanie tensorów wejściowych...'),
         duration: Duration(seconds: 1),
       ),
     );
-    final inputImage = img.copyResize(originalImage, width: targetWidth, height: targetHeight);
-    final interleavedBytes = inputImage.getBytes(order: img.ChannelOrder.rgb);
-    
-    final imageBytes = convertInterleavedToNCHW(interleavedBytes, targetWidth, targetHeight);
-    final maskBytes = Uint8List.fromList(
-      List.generate(targetWidth * targetHeight, (i) {
-        final pixel = maskImage.getPixel(i % targetWidth, i ~/ targetHeight);
-        final luminance = img.getLuminanceRgb(
-          pixel.r.toInt(),
-          pixel.g.toInt(),
-          pixel.b.toInt(),
-        );
-        return luminance.toInt() == 0 ? 1 : 0; 
-      }),
-    );
-    
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Inicjalizacja środowiska ONNX...\nimageBytes: ${imageBytes.length} (oczekiwane: ${width * height * 3})\nmaskBytes: ${maskBytes.length} (oczekiwane: ${width * height})'),
-        duration: Duration(seconds: 3),
-      ),
-    );
+    final imageTensor = convertImageToUint8NCHW(originalImage);
+    final maskTensor = convertMaskToUint8NCHW(maskImage);
+
     OrtEnv.instance.init();
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
     final session = OrtSession.fromBuffer(
@@ -170,142 +147,79 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       OrtSessionOptions(),
     );
 
-    final imageTensor = OrtValueTensor.createTensorWithDataList(imageBytes, [1, 3, targetHeight, targetWidth]);
-    final maskTensor = OrtValueTensor.createTensorWithDataList(maskBytes, [1, 1, targetHeight, targetWidth]);
-
     messenger.showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('Uruchomienie ONNX.'),
         duration: Duration(seconds: 1),
       ),
     );
 
+    final inputs = {'image': imageTensor, 'mask': maskTensor};
+    final outputNames = ['result'];
+
     final options = OrtRunOptions();
-    final outputs = await session.run(
+    final result = session.run(
       options,
-      {'image': imageTensor, 'mask': maskTensor},
-      ['result'],
+      inputs,
+      outputNames,
     );
 
     messenger.showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('Wynik ONNX uzyskany.'),
         duration: Duration(seconds: 1),
       ),
     );
-    final output = outputs.first?.value;
-
-    if (output is Uint8List) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text("Wynik ONNX to Uint8List (${output.length} bajtów)"),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      final outputImage = img.Image.fromBytes(
-        width: targetWidth,
-        height: targetHeight,
-        bytes: output.buffer,
-        order: img.ChannelOrder.rgb,
-      );
-
-      final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
-      debugPrint("📦 Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
-
-      final tempDir = await Directory.systemTemp.createTemp();
-      final filePath = '${tempDir.path}/output.jpg';
-      final resultFile = await File(filePath).writeAsBytes(resultBytes);
-
-      setState(() {
-        _imageFile = resultFile;
-        _points.clear();
-      });
-    } else if (output is List) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Wynik ONNX to zagnieżdżona lista'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      final raw = output[0] as List<List<List<int>>>; // [3, H, W]
-      final channels = raw.length;
-      final height = raw[0].length;
-      final width = raw[0][0].length;
-
-      debugPrint("🧠 Rozmiary wyniku: [C=$channels, H=$height, W=$width]");
-
-      final rgbBytes = Uint8List(width * height * 3);
-
-      for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-          final r = raw[0][y][x];
-          final g = raw[1][y][x];
-          final b = raw[2][y][x];
-          final idx = (y * width + x) * 3;
-          rgbBytes[idx] = r;
-          rgbBytes[idx + 1] = g;
-          rgbBytes[idx + 2] = b;
-        }
-      }
-
-      debugPrint("🎨 Utworzono RGB Uint8List (${rgbBytes.length} bajtów)");
-
-      final outputImage = img.Image.fromBytes(
-        width: width,
-        height: height,
-        bytes: rgbBytes.buffer,
-        order: img.ChannelOrder.rgb,
-      );
-
-      final resultBytes = Uint8List.fromList(img.encodeJpg(outputImage));
-      debugPrint("✅ Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
-
-      final tempDir = await Directory.systemTemp.createTemp();
-      final filePath = '${tempDir.path}/output.jpg';
-      final resultFile = await File(filePath).writeAsBytes(resultBytes);
-
-      setState(() {
-        _imageFile = resultFile;
-        _points.clear();
-      });
-    } else {
-      debugPrint("❌ Nieznany typ wyniku z ONNX: ${output.runtimeType}");
-      messenger.showSnackBar(
-        SnackBar(content: Text("❌ Błąd: nieobsługiwany typ wyniku ONNX")),
-      );
-      return;
-    }
+    final output = result[0]!.value as List;
+    final imgOut = convertNCHWtoImage(output);
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('✅ Inpainting zakończony sukcesem!'),
-        duration: Duration(seconds: 2),
+        content: Text("Wynik ONNX to Uint8List (${output.length} bajtów)"),
+        duration: const Duration(seconds: 2),
       ),
     );
+
+    final resultBytes = Uint8List.fromList(img.encodeJpg(imgOut));
+    debugPrint("📦 Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
+
+    final tempDir = await Directory.systemTemp.createTemp();
+    final filePath = '${tempDir.path}/output.jpg';
+    final resultFile = await File(filePath).writeAsBytes(resultBytes);
+
+    setState(() {
+      _imageFile = resultFile;
+      _points.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("MI-GAN Inpainting")),
+      appBar: AppBar(title: const Text("MI-GAN Inpainting")),
       body: _imageFile == null
-          ? Center(child: Text("Brak zdjęcia"))
-          : Stack(
-              children: [
-                Image.file(_imageFile!),
-                GestureDetector(
-                  onPanUpdate: (details) {
-                    setState(() => _points.add(details.localPosition));
-                  },
-                  onPanEnd: (_) => _points.add(Offset.infinite),
-                  child: CustomPaint(
-                    painter: MaskPainter(_points),
-                    size: Size.infinite,
-                  ),
+          ? const Center(child: Text("Brak zdjęcia"))
+          : Center(
+              child: SizedBox(
+                width: _imageWidth?.toDouble(),
+                height: _imageHeight?.toDouble(),
+                child: Stack(
+                  children: [
+                    Image.file(_imageFile!),
+                    GestureDetector(
+                      onPanUpdate: (details) {
+                        setState(() => _points.add(details.localPosition));
+                      },
+                      onPanEnd: (_) => _points.add(Offset.infinite),
+                      child: CustomPaint(
+                        painter: MaskPainter(_points),
+                        size: Size(
+                            _imageWidth!.toDouble(), _imageHeight!.toDouble()),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
@@ -313,13 +227,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
           FloatingActionButton(
             onPressed: _pickImage,
             heroTag: 'pick',
-            child: Icon(Icons.photo_library),
+            child: const Icon(Icons.photo_library),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           FloatingActionButton(
             onPressed: _startInpaintingWithSnackBar,
             heroTag: 'inpaint',
-            child: Icon(Icons.auto_fix_high),
+            child: const Icon(Icons.auto_fix_high),
           ),
         ],
       ),
@@ -349,17 +263,66 @@ class MaskPainter extends CustomPainter {
   bool shouldRepaint(MaskPainter oldDelegate) => true;
 }
 
-Uint8List convertInterleavedToNCHW(Uint8List rgb, int width, int height) {
-  final total = width * height;
-  final r = Uint8List(total);
-  final g = Uint8List(total);
-  final b = Uint8List(total);
+OrtValueTensor convertImageToUint8NCHW(img.Image image) {
+  final w = image.width, h = image.height;
+  final pixels = image.getBytes(order: img.ChannelOrder.rgb);
 
-  for (int i = 0; i < total; i++) {
-    r[i] = rgb[i * 3];
-    g[i] = rgb[i * 3 + 1];
-    b[i] = rgb[i * 3 + 2];
+  final uint8s = <int>[];
+
+  for (int c = 0; c < 3; c++) {
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final i = (y * w + x) * 3 + c;
+        final value = pixels[i];
+        uint8s.add(value);
+      }
+    }
   }
 
-  return Uint8List.fromList([...r, ...g, ...b]);
+  return OrtValueTensor.createTensorWithDataList(Uint8List.fromList(uint8s), [
+    1,
+    3,
+    h,
+    w,
+  ]);
+}
+
+OrtValueTensor convertMaskToUint8NCHW(img.Image mask) {
+  final w = mask.width, h = mask.height;
+  final pixels = mask.getBytes();
+
+  final uint8s = <int>[];
+
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      final i = y * w + x;
+      final value = pixels[i];
+      uint8s.add(value);
+    }
+  }
+
+  return OrtValueTensor.createTensorWithDataList(Uint8List.fromList(uint8s), [
+    1,
+    1,
+    h,
+    w,
+  ]);
+}
+
+img.Image convertNCHWtoImage(List data) {
+  final channels = data[0];
+  final h = channels[0].length;
+  final w = channels[0][0].length;
+  final image = img.Image(width: w, height: h);
+
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      final r = channels[0][y][x];
+      final g = channels[1][y][x];
+      final b = channels[2][y][x];
+      image.setPixelRgb(x, y, r, g, b);
+    }
+  }
+
+  return image;
 }
