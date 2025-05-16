@@ -75,11 +75,23 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
+      const int targetSize = 512;
+      final resized = img.copyResize(
+        decoded,
+        width: targetSize,
+        height: targetSize,
+        interpolation: img.Interpolation.linear,
+      );
+
+      final resizedBytes = Uint8List.fromList(img.encodeJpg(resized));
+      final tempDir = await Directory.systemTemp.createTemp();
+      final resizedPath = '${tempDir.path}/resized.jpg';
+      final resizedFile = await File(resizedPath).writeAsBytes(resizedBytes);
 
       setState(() {
-        _imageFile = file;
-        _imageWidth = decoded.width;
-        _imageHeight = decoded.height;
+        _imageFile = resizedFile;
+        _imageWidth = resized.width;
+        _imageHeight = resized.height;
         _points.clear();
       });
     }
