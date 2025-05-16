@@ -264,11 +264,24 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                         : Image.file(
                             _imageFile!,
                             key: imageKey,
-                            fit: BoxFit.contain,
+                            width: _imageWidth!.toDouble(),
+                            height: _imageHeight!.toDouble(),
                           ),
                     GestureDetector(
                       onPanUpdate: (details) {
-                        setState(() => _points.add(details.localPosition));
+                        final box = imageKey.currentContext?.findRenderObject()
+                            as RenderBox?;
+                        if (box == null) return;
+
+                        final renderSize = box.size;
+                        final scaleX = _imageWidth! / renderSize.width;
+                        final scaleY = _imageHeight! / renderSize.height;
+
+                        final corrected = Offset(
+                          details.localPosition.dx * scaleX,
+                          details.localPosition.dy * scaleY,
+                        );
+                        setState(() => _points.add(corrected));
                       },
                       onPanEnd: (_) => _points.add(Offset.infinite),
                       child: CustomPaint(
