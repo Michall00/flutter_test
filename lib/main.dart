@@ -294,25 +294,29 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                 ),
               ),
             ),
-      floatingActionButton: Column(
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           FloatingActionButton(
             onPressed: _pickImage,
             heroTag: 'pick',
             child: const Icon(Icons.photo_library),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(width: 16),
           FloatingActionButton(
             onPressed: _startInpaintingWithSnackBar,
             heroTag: 'inpaint',
             child: const Icon(Icons.auto_fix_high),
           ),
+          const SizedBox(width: 16),
           FloatingActionButton(
             onPressed: _generateMaskPreview,
             heroTag: 'preview',
             child: const Icon(Icons.visibility),
           ),
+          const SizedBox(width: 16),
           FloatingActionButton(
             onPressed: () {
               setState(() {
