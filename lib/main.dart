@@ -203,6 +203,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     setState(() {
       _imageFile = resultFile;
       _points.clear();
+      _previewMaskBytes = null;
     });
   }
 
@@ -292,6 +293,16 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
             onPressed: _generateMaskPreview,
             heroTag: 'preview',
             child: const Icon(Icons.visibility),
+          ),
+          FloatingActionButton(
+            onPressed: () {
+              setState(() {
+                _points.clear();
+                _previewMaskBytes = null;
+              });
+            },
+            heroTag: 'clear',
+            child: const Icon(Icons.clear),
           ),
         ],
       ),
