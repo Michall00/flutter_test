@@ -34,6 +34,7 @@ class ImagePickerPage extends StatefulWidget {
 
 class _ImagePickerPageState extends State<ImagePickerPage> {
   File? _imageFile;
+  img.Image? _maskImage;
   int? _imageWidth;
   int? _imageHeight;
   Uint8List? _previewMaskBytes;
@@ -78,24 +79,18 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
-      const int targetSize = 512;
-      final resized = img.copyResize(
-        decoded,
-        width: targetSize,
-        height: targetSize,
-        interpolation: img.Interpolation.linear,
-      );
-
-      final resizedBytes = Uint8List.fromList(img.encodeJpg(resized));
-      final tempDir = await Directory.systemTemp.createTemp();
-      final resizedPath = '${tempDir.path}/resized.jpg';
-      final resizedFile = await File(resizedPath).writeAsBytes(resizedBytes);
 
       setState(() {
-        _imageFile = resizedFile;
-        _imageWidth = resized.width;
-        _imageHeight = resized.height;
+        _imageFile = file; // oryginalny obraz
+        _imageWidth = decoded.width;
+        _imageHeight = decoded.height;
         _points.clear();
+
+        _maskImage = img.Image(
+          width: decoded.width,
+          height: decoded.height,
+          numChannels: 1,
+        )..getBytes().fillRange(0, decoded.width * decoded.height, 255);
       });
     }
   }
@@ -118,14 +113,16 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 2),
       ),
     );
+
+    const targetSize = 512;
     final bytes = await _imageFile!.readAsBytes();
     final originalImage = img.decodeImage(bytes)!;
-    final width = originalImage.width;
-    final height = originalImage.height;
+    // final width = originalImage.width;
+    // final height = originalImage.height;
 
-    final maskImage = img.Image(width: width, height: height, numChannels: 1);
+    // final maskImage = img.Image(width: width, height: height, numChannels: 1);
 
-    maskImage.getBytes().fillRange(0, width * height, 255);
+    // maskImage.getBytes().fillRange(0, width * height, 255);
     final pointsToDraw = _points.where((p) => p != Offset.infinite).toList();
     messenger.showSnackBar(
       SnackBar(
@@ -136,9 +133,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
     for (final point in _points) {
       if (point == Offset.infinite) continue;
-
       img.drawCircle(
-        maskImage,
+        _maskImage!,
         x: point.dx.toInt(),
         y: point.dy.toInt(),
         radius: 15,
@@ -146,14 +142,28 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       );
     }
 
+    final resizedImage = img.copyResize(
+      originalImage,
+      width: targetSize,
+      height: targetSize,
+      interpolation: img.Interpolation.linear,
+    );
+
+    final resizedMask = img.copyResize(
+      _maskImage!,
+      width: targetSize,
+      height: targetSize,
+      interpolation: img.Interpolation.nearest,
+    );
+
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Generowanie tensorów wejściowych...'),
         duration: Duration(seconds: 1),
       ),
     );
-    final imageTensor = convertImageToUint8NCHW(originalImage);
-    final maskTensor = convertMaskToUint8NCHW(maskImage);
+    final imageTensor = convertImageToUint8NCHW(resizedImage);
+    final maskTensor = convertMaskToUint8NCHW(resizedMask);
 
     OrtEnv.instance.init();
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
@@ -195,7 +205,14 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       ),
     );
 
-    final resultBytes = Uint8List.fromList(img.encodeJpg(imgOut));
+    final upscaledResult = img.copyResize(
+      imgOut,
+      width: _imageWidth!,
+      height: _imageHeight!,
+      interpolation: img.Interpolation.linear,
+    );
+
+    final resultBytes = Uint8List.fromList(img.encodeJpg(upscaledResult));
     debugPrint("📦 Zakodowano wynik do JPG (${resultBytes.length} bajtów)");
 
     final tempDir = await Directory.systemTemp.createTemp();
@@ -210,11 +227,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   }
 
   void _generateMaskPreview() {
-    if (_imageFile == null || _imageWidth == null || _imageHeight == null)
+    if (_imageFile == null || _imageWidth == null || _imageHeight == null) {
       return;
+    }
 
     final original = img.decodeImage(_imageFile!.readAsBytesSync())!;
-    final preview = img.Image.from(original); // kopia
+    final preview = img.Image.from(original);
 
     final mask =
         img.Image(width: _imageWidth!, height: _imageHeight!, numChannels: 1);
@@ -228,14 +246,11 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       img.drawCircle(mask, x: x, y: y, radius: 15, color: img.ColorUint8(0));
     }
 
-    // Pokoloruj maskę na czerwono jako overlay
     for (int y = 0; y < mask.height; y++) {
       for (int x = 0; x < mask.width; x++) {
         final pixel = mask.getPixel(x, y);
-        final value =
-            pixel.getChannel(img.Channel.luminance); // get the grayscale value
+        final value = pixel.getChannel(img.Channel.luminance);
         if (value == 0) {
-          // półprzezroczysty czerwony
           preview.setPixelRgba(x, y, 255, 0, 0, 100);
         }
       }
@@ -269,25 +284,15 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                           ),
                     GestureDetector(
                       onPanUpdate: (details) {
-                        final box = imageKey.currentContext?.findRenderObject()
-                            as RenderBox?;
-                        if (box == null) return;
-
-                        final renderSize = box.size;
-                        final scaleX = _imageWidth! / renderSize.width;
-                        final scaleY = _imageHeight! / renderSize.height;
-
-                        final corrected = Offset(
-                          details.localPosition.dx * scaleX,
-                          details.localPosition.dy * scaleY,
-                        );
-                        setState(() => _points.add(corrected));
+                        setState(() => _points.add(details.localPosition));
                       },
                       onPanEnd: (_) => _points.add(Offset.infinite),
                       child: CustomPaint(
                         painter: MaskPainter(_points),
                         size: Size(
-                            _imageWidth!.toDouble(), _imageHeight!.toDouble()),
+                          _imageWidth!.toDouble(),
+                          _imageHeight!.toDouble(),
+                        ),
                       ),
                     ),
                   ],
