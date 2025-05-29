@@ -87,11 +87,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
+      final targer_size = 512;
 
       final resized = img.copyResize(
         decoded,
-        width: 1024,
-        height: 1024,
+        width: targer_size,
+        height: targer_size,
         interpolation: img.Interpolation.linear,
       );
 
@@ -102,12 +103,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
       setState(() {
         _imageFile = tempFile;
-        _imageWidth = 1024;
-        _imageHeight = 1024;
+        _imageWidth = targer_size;
+        _imageHeight = targer_size;
         _points.clear();
         _segmentationMask = null;
-        _maskImage = img.Image(width: 1024, height: 1024, numChannels: 1)
-          ..getBytes().fillRange(0, 1024 * 1024, 255);
+        _maskImage =
+            img.Image(width: targer_size, height: targer_size, numChannels: 1)
+              ..getBytes().fillRange(0, targer_size * targer_size, 255);
       });
     }
   }
@@ -214,8 +216,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     }
 
     final mask = img.Image.fromBytes(
-      width: 1024,
-      height: 1024,
+      width: 512,
+      height: 512,
       bytes: Uint8List.fromList(binary).buffer,
       numChannels: 1,
       format: img.Format.uint8,
