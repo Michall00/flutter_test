@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -10,6 +11,10 @@ void main() {
 }
 
 final GlobalKey imageKey = GlobalKey();
+
+enum InteractionMode { draw, segment }
+
+InteractionMode _mode = InteractionMode.segment;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -39,6 +44,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   int? _imageHeight;
   Uint8List? _previewMaskBytes;
   final List<Offset> _points = [];
+  OrtSession? _encoderSession;
+  OrtSession? _decoderSession;
+  Uint8List? _segmentationMask;
 
   void _startInpaintingWithSnackBar() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -49,7 +57,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('✅ Inpainting zakończony!'),
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 1),
         ),
       );
     } catch (e, stacktrace) {
@@ -80,19 +88,149 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         return;
       }
 
-      setState(() {
-        _imageFile = file; // oryginalny obraz
-        _imageWidth = decoded.width;
-        _imageHeight = decoded.height;
-        _points.clear();
+      final resized = img.copyResize(
+        decoded,
+        width: 1024,
+        height: 1024,
+        interpolation: img.Interpolation.linear,
+      );
 
-        _maskImage = img.Image(
-          width: decoded.width,
-          height: decoded.height,
-          numChannels: 1,
-        )..getBytes().fillRange(0, decoded.width * decoded.height, 255);
+      final resultBytes = Uint8List.fromList(img.encodePng(resized));
+      final tempFile = await File(
+              '${(await Directory.systemTemp.createTemp()).path}/input.png')
+          .writeAsBytes(resultBytes);
+
+      setState(() {
+        _imageFile = tempFile;
+        _imageWidth = 1024;
+        _imageHeight = 1024;
+        _points.clear();
+        _segmentationMask = null;
+        _maskImage = img.Image(width: 1024, height: 1024, numChannels: 1)
+          ..getBytes().fillRange(0, 1024 * 1024, 255);
       });
     }
+  }
+
+  Future<void> _runSegmentationFromClick(Offset point) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (_imageFile == null) return;
+
+    final bytes = await _imageFile!.readAsBytes();
+    final image = img.decodeImage(bytes)!;
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Wczytenie pliku do segmentacji...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final w = image.width, h = image.height;
+
+    final encoderData = await rootBundle.load('assets/encoder.onnx');
+    final decoderData = await rootBundle.load('assets/decoder.onnx');
+    _encoderSession = OrtSession.fromBuffer(
+        encoderData.buffer.asUint8List(), OrtSessionOptions());
+    _decoderSession = OrtSession.fromBuffer(
+        decoderData.buffer.asUint8List(), OrtSessionOptions());
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Załadowanie sesji...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    final pixels = image.getBytes(order: img.ChannelOrder.rgb);
+    final imgFloat = Float32List(w * h * 3);
+    for (int i = 0; i < pixels.length; i++) {
+      imgFloat[i] = pixels[i].toDouble();
+    }
+
+    final encoderInput =
+        OrtValueTensor.createTensorWithDataList(imgFloat, [h, w, 3]);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Uruchomienie enkodera...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final embeddings = _encoderSession!.run(
+      OrtRunOptions(),
+      {'input_image': encoderInput},
+      ['image_embeddings'],
+    );
+    encoderInput.release();
+    _encoderSession?.release();
+    messenger.showSnackBar(
+      const SnackBar(
+        content:
+            Text('Output z enkodera i przygotowanie danych do dekodera...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final embTensor = embeddings[0]!;
+
+    final scaled = Offset(point.dx * (1024 / w), point.dy * (1024 / h));
+    final coords = Float32List.fromList([scaled.dx, scaled.dy, 0.0, 0.0]);
+    final labels = Float32List.fromList([1.0, -1.0]);
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Uruchomienie dekodera...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final decoderInputs = {
+      'image_embeddings': embTensor,
+      'point_coords':
+          OrtValueTensor.createTensorWithDataList(coords, [1, 2, 2]),
+      'point_labels': OrtValueTensor.createTensorWithDataList(labels, [1, 2]),
+      'mask_input': OrtValueTensor.createTensorWithDataList(
+          Float32List(1 * 1 * 256 * 256), [1, 1, 256, 256]),
+      'has_mask_input': OrtValueTensor.createTensorWithDataList(
+          Float32List.fromList([0.0]), [1]),
+      'orig_im_size': OrtValueTensor.createTensorWithDataList(
+          Float32List.fromList([h.toDouble(), w.toDouble()]), [2]),
+    };
+    embTensor.release();
+    _decoderSession?.release();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Koniec dekodera...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    final maskOutput =
+        _decoderSession!.run(OrtRunOptions(), decoderInputs, ['masks']);
+    final rawMask = maskOutput[0]!.value as List;
+
+    final binary = <int>[];
+    for (final row in rawMask[0][0] as List) {
+      for (final v in row as List) {
+        binary.add((v as double) > 0 ? 0 : 255);
+      }
+    }
+
+    final mask = img.Image.fromBytes(
+      width: 1024,
+      height: 1024,
+      bytes: Uint8List.fromList(binary).buffer,
+      numChannels: 1,
+      format: img.Format.uint8,
+    );
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Przetworzenie maski po dekoderze...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    setState(() {
+      _segmentationMask = Uint8List.fromList(img.encodePng(mask));
+      _maskImage = mask;
+    });
   }
 
   Future<void> _runInpainting() async {
@@ -101,7 +239,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Brak pliku obrazu!'),
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 1),
         ),
       );
       return;
@@ -110,11 +248,11 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Wczytenie pliku do inpaintingu...'),
-        duration: Duration(seconds: 2),
+        duration: Duration(seconds: 1),
       ),
     );
 
-    const targetSize = 512;
+    // const targetSize = 512;
     final bytes = await _imageFile!.readAsBytes();
     final originalImage = img.decodeImage(bytes)!;
     // final width = originalImage.width;
@@ -131,30 +269,23 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       ),
     );
 
-    for (final point in _points) {
-      if (point == Offset.infinite) continue;
-      img.drawCircle(
-        _maskImage!,
-        x: point.dx.toInt(),
-        y: point.dy.toInt(),
-        radius: 15,
-        color: img.ColorUint8(0),
-      );
+    if (_segmentationMask != null) {
+      _maskImage = img.decodeImage(_segmentationMask!)!;
     }
 
-    final resizedImage = img.copyResize(
-      originalImage,
-      width: targetSize,
-      height: targetSize,
-      interpolation: img.Interpolation.linear,
-    );
+    // final resizedImage = img.copyResize(
+    //   originalImage,
+    //   width: targetSize,
+    //   height: targetSize,
+    //   interpolation: img.Interpolation.linear,
+    // );
 
-    final resizedMask = img.copyResize(
-      _maskImage!,
-      width: targetSize,
-      height: targetSize,
-      interpolation: img.Interpolation.nearest,
-    );
+    // final resizedMask = img.copyResize(
+    //   _maskImage!,
+    //   width: targetSize,
+    //   height: targetSize,
+    //   interpolation: img.Interpolation.nearest,
+    // );
 
     messenger.showSnackBar(
       const SnackBar(
@@ -162,8 +293,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
-    final imageTensor = convertImageToUint8NCHW(resizedImage);
-    final maskTensor = convertMaskToUint8NCHW(resizedMask);
+    final imageTensor = convertImageToUint8NCHW(originalImage);
+    final maskTensor = convertMaskToUint8NCHW(_maskImage!);
 
     OrtEnv.instance.init();
     final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
@@ -188,6 +319,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       inputs,
       outputNames,
     );
+    imageTensor.release();
+    maskTensor.release();
+    session.release();
 
     messenger.showSnackBar(
       const SnackBar(
@@ -201,7 +335,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     messenger.showSnackBar(
       SnackBar(
         content: Text("Wynik ONNX to Uint8List (${output.length} bajtów)"),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 1),
       ),
     );
 
@@ -283,15 +417,46 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                             height: _imageHeight!.toDouble(),
                           ),
                     GestureDetector(
-                      onPanUpdate: (details) {
-                        setState(() => _points.add(details.localPosition));
+                      onTapDown: (details) {
+                        if (_mode == InteractionMode.segment) {
+                          final box = imageKey.currentContext!
+                              .findRenderObject() as RenderBox;
+                          final local =
+                              box.globalToLocal(details.globalPosition);
+                          _runSegmentationFromClick(local);
+                        }
                       },
-                      onPanEnd: (_) => _points.add(Offset.infinite),
+                      onPanUpdate: (details) {
+                        if (_mode == InteractionMode.draw) {
+                          setState(() => _points.add(details.localPosition));
+                        }
+                      },
+                      onPanEnd: (_) {
+                        if (_mode == InteractionMode.draw) {
+                          _points.add(Offset.infinite);
+                        }
+                      },
                       child: CustomPaint(
                         painter: MaskPainter(_points),
                         size: Size(
-                          _imageWidth!.toDouble(),
-                          _imageHeight!.toDouble(),
+                            _imageWidth!.toDouble(), _imageHeight!.toDouble()),
+                      ),
+                    ),
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: FloatingActionButton(
+                        onPressed: () {
+                          setState(() {
+                            _mode = _mode == InteractionMode.draw
+                                ? InteractionMode.segment
+                                : InteractionMode.draw;
+                          });
+                        },
+                        child: Icon(
+                          _mode == InteractionMode.draw
+                              ? Icons.edit
+                              : Icons.crop_free,
                         ),
                       ),
                     ),
@@ -331,6 +496,19 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
             },
             heroTag: 'clear',
             child: const Icon(Icons.clear),
+          ),
+          FloatingActionButton(
+            onPressed: () {
+              setState(() {
+                _mode = _mode == InteractionMode.draw
+                    ? InteractionMode.segment
+                    : InteractionMode.draw;
+              });
+            },
+            heroTag: 'mode',
+            child: Icon(
+              _mode == InteractionMode.draw ? Icons.brush : Icons.touch_app,
+            ),
           ),
         ],
       ),
