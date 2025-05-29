@@ -56,9 +56,9 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/migan_pipeline_v2.onnx
-    - assets/sam_mask_decoder_single.onnx
-    - assets/mobile_sam_image_encoder.onnx
+    - assets/migan.onnx
+    - assets/decoder.onnx
+    - assets/encoder.onnx
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

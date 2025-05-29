@@ -297,7 +297,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final maskTensor = convertMaskToUint8NCHW(_maskImage!);
 
     OrtEnv.instance.init();
-    final modelData = await rootBundle.load('assets/migan_pipeline_v2.onnx');
+    final modelData = await rootBundle.load('assets/migan.onnx');
     final session = OrtSession.fromBuffer(
       modelData.buffer.asUint8List(),
       OrtSessionOptions(),
