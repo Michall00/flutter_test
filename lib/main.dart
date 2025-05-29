@@ -44,8 +44,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   int? _imageHeight;
   Uint8List? _previewMaskBytes;
   final List<Offset> _points = [];
-  OrtSession? _encoderSession;
-  OrtSession? _decoderSession;
   Uint8List? _segmentationMask;
 
   void _startInpaintingWithSnackBar() async {
@@ -118,6 +116,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     final messenger = ScaffoldMessenger.of(context);
     if (_imageFile == null) return;
 
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Uruchomienie segmentacji...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
     final bytes = await _imageFile!.readAsBytes();
     final image = img.decodeImage(bytes)!;
 
@@ -127,14 +132,10 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
-    final w = image.width, h = image.height;
 
     final encoderData = await rootBundle.load('assets/encoder.onnx');
-    final decoderData = await rootBundle.load('assets/decoder.onnx');
-    _encoderSession = OrtSession.fromBuffer(
+    final encoderSession = OrtSession.fromBuffer(
         encoderData.buffer.asUint8List(), OrtSessionOptions());
-    _decoderSession = OrtSession.fromBuffer(
-        decoderData.buffer.asUint8List(), OrtSessionOptions());
 
     messenger.showSnackBar(
       const SnackBar(
@@ -144,26 +145,26 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     );
 
     final pixels = image.getBytes(order: img.ChannelOrder.rgb);
-    final imgFloat = Float32List(w * h * 3);
+    final imgFloat = Float32List(image.width * image.height * 3);
     for (int i = 0; i < pixels.length; i++) {
       imgFloat[i] = pixels[i].toDouble();
     }
 
-    final encoderInput =
-        OrtValueTensor.createTensorWithDataList(imgFloat, [h, w, 3]);
+    final encoderInput = OrtValueTensor.createTensorWithDataList(
+        imgFloat, [image.height, image.width, 3]);
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Uruchomienie enkodera...'),
         duration: Duration(seconds: 1),
       ),
     );
-    final embeddings = _encoderSession!.run(
+    final embeddings = encoderSession.run(
       OrtRunOptions(),
       {'input_image': encoderInput},
       ['image_embeddings'],
     );
     encoderInput.release();
-    _encoderSession?.release();
+    encoderSession.release();
     messenger.showSnackBar(
       const SnackBar(
         content:
@@ -171,9 +172,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
-    final embTensor = embeddings[0]!;
 
-    final scaled = Offset(point.dx * (1024 / w), point.dy * (1024 / h));
+    final scaled = Offset(
+        point.dx * (1024 / image.width), point.dy * (1024 / image.height));
     final coords = Float32List.fromList([scaled.dx, scaled.dy, 0.0, 0.0]);
     final labels = Float32List.fromList([1.0, -1.0]);
 
@@ -183,8 +184,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
+
+    final decoderData = await rootBundle.load('assets/decoder.onnx');
+    final decoderSession = OrtSession.fromBuffer(
+        decoderData.buffer.asUint8List(), OrtSessionOptions());
+
     final decoderInputs = {
-      'image_embeddings': embTensor,
+      'image_embeddings': embeddings[0]!,
       'point_coords':
           OrtValueTensor.createTensorWithDataList(coords, [1, 2, 2]),
       'point_labels': OrtValueTensor.createTensorWithDataList(labels, [1, 2]),
@@ -193,10 +199,11 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       'has_mask_input': OrtValueTensor.createTensorWithDataList(
           Float32List.fromList([0.0]), [1]),
       'orig_im_size': OrtValueTensor.createTensorWithDataList(
-          Float32List.fromList([h.toDouble(), w.toDouble()]), [2]),
+          Float32List.fromList(
+              [image.height.toDouble(), image.width.toDouble()]),
+          [2]),
     };
-    embTensor.release();
-    _decoderSession?.release();
+    decoderSession.release();
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Koniec dekodera...'),
@@ -205,7 +212,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     );
 
     final maskOutput =
-        _decoderSession!.run(OrtRunOptions(), decoderInputs, ['masks']);
+        decoderSession.run(OrtRunOptions(), decoderInputs, ['masks']);
     final rawMask = maskOutput[0]!.value as List;
 
     final binary = <int>[];
