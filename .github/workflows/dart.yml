@@ -28,8 +28,11 @@ jobs:
             sed -i '' '1s;^;platform :ios, '\''13.0'\''\n;' Podfile
           fi
 
-      - run: pod repo update
-        working-directory: ios
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
 
       - name: Build archive and generate dSYM
         run: |
@@ -40,6 +43,9 @@ jobs:
             -configuration Release \
             -archivePath build/ios/archive/Runner.xcarchive \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: List generated dSYM files
+        run: ls -R build/ios/archive/Runner.xcarchive/dSYMs
 
       - name: Upload dSYM to Firebase Crashlytics
         run: |
