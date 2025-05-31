@@ -35,9 +35,7 @@ jobs:
 
       - name: Upload dSYM to Firebase Crashlytics
         run: |
-          curl -L https://firebase.google.com/downloads/crashlytics/firebase-crashlytics-upload-symbols -o upload-symbols
-          chmod +x upload-symbols
-          ./upload-symbols \
+          ./ios/Pods/FirebaseCrashlytics/upload-symbols \
             -gsp ios/Runner/GoogleService-Info.plist \
             -p ios build/ios/iphoneos
 
