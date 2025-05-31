@@ -114,6 +114,10 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
               '${(await Directory.systemTemp.createTemp()).path}/input.png')
           .writeAsBytes(resultBytes);
 
+      FirebaseCrashlytics.instance.log("Obraz wybrany przez użytkownika");
+      FirebaseCrashlytics.instance.setCustomKey(
+          "image_resolution", "${decoded.width}x${decoded.height}");
+
       setState(() {
         _imageFile = tempFile;
         _imageWidth = targer_size;
@@ -128,6 +132,10 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   }
 
   Future<void> _runSegmentationFromClick(Offset point) async {
+    FirebaseCrashlytics.instance.log(
+        "🎯 Start segmentacji na pozycji: ${point.dx.toStringAsFixed(1)}, ${point.dy.toStringAsFixed(1)}");
+    FirebaseCrashlytics.instance.setCustomKey("segment_point_x", point.dx);
+    FirebaseCrashlytics.instance.setCustomKey("segment_point_y", point.dy);
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       const SnackBar(
@@ -137,30 +145,15 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     );
     if (_imageFile == null) return;
 
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Uruchomienie segmentacji...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
     final bytes = await _imageFile!.readAsBytes();
     final image = img.decodeImage(bytes)!;
+
+    FirebaseCrashlytics.instance
+        .setCustomKey("image_dims", "${image.width}x${image.height}");
 
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Wczytenie pliku do segmentacji...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
-    final encoderData = await rootBundle.load('assets/encoder.onnx');
-    final encoderSession = OrtSession.fromBuffer(
-        encoderData.buffer.asUint8List(), OrtSessionOptions());
-
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Załadowanie sesji...'),
         duration: Duration(seconds: 1),
       ),
     );
@@ -173,6 +166,15 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
     final encoderInput = OrtValueTensor.createTensorWithDataList(
         imgFloat, [image.height, image.width, 3]);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Załadowanie sesji...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final encoderData = await rootBundle.load('assets/encoder.onnx');
+    final encoderSession = OrtSession.fromBuffer(
+        encoderData.buffer.asUint8List(), OrtSessionOptions());
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Uruchomienie enkodera...'),
@@ -193,6 +195,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
+    FirebaseCrashlytics.instance.log("🧠 Zakończono inferencję enkodera");
 
     final scaled = Offset(
         point.dx * (1024 / image.width), point.dy * (1024 / image.height));
@@ -231,6 +234,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         duration: Duration(seconds: 1),
       ),
     );
+    FirebaseCrashlytics.instance.log("🧠 Zakończono inferencję dekodera");
+    FirebaseCrashlytics.instance.setCustomKey("mask_output_size", "512x512");
 
     final maskOutput =
         decoderSession.run(OrtRunOptions(), decoderInputs, ['masks']);
@@ -264,6 +269,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   }
 
   Future<void> _runInpainting() async {
+    FirebaseCrashlytics.instance.log("🎨 Rozpoczęcie inpaintingu");
     final messenger = ScaffoldMessenger.of(context);
     if (_imageFile == null) {
       messenger.showSnackBar(
@@ -340,14 +346,14 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       ),
     );
 
-    final inputs = {'image': imageTensor, 'mask': maskTensor};
-    final outputNames = ['result'];
+    // final inputs = {'image': imageTensor, 'mask': maskTensor};
+    // final outputNames = ['result'];
 
-    final options = OrtRunOptions();
+    // final options = OrtRunOptions();
     final result = session.run(
-      options,
-      inputs,
-      outputNames,
+      OrtRunOptions(),
+      {'image': imageTensor, 'mask': maskTensor},
+      ['result'],
     );
     imageTensor.release();
     maskTensor.release();
@@ -361,6 +367,9 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     );
     final output = result[0]!.value as List;
     final imgOut = convertNCHWtoImage(output);
+    FirebaseCrashlytics.instance.log("✅ MI-GAN inference zakończony sukcesem");
+    FirebaseCrashlytics.instance
+        .setCustomKey("result_size", "${output.length} px");
 
     messenger.showSnackBar(
       SnackBar(
