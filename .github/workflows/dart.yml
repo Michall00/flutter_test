@@ -22,7 +22,11 @@ jobs:
           if [ ! -f Podfile ]; then
             pod init
           fi
-          sed -i '' 's/^#\? *platform :ios.*/platform :ios, '\''13.0'\''/' Podfile || echo "platform :ios, '13.0'" >> Podfile
+          if grep -q "^platform :ios" Podfile; then
+            sed -i '' 's/^platform :ios.*/platform :ios, '\''13.0'\''/' Podfile
+          else
+            sed -i '' '1s;^;platform :ios, '\''13.0'\''\n;' Podfile
+          fi
 
       - run: pod repo update
         working-directory: ios
