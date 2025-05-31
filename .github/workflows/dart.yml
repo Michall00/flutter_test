@@ -36,7 +36,8 @@ jobs:
 
       - name: Build archive and generate dSYM
         run: |
-          # flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
+          flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
+
           xcodebuild archive \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
@@ -44,12 +45,11 @@ jobs:
             -archivePath build/ios/archive/Runner.xcarchive \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Export IPA from archive
-        run: |
           xcodebuild -exportArchive \
             -archivePath build/ios/archive/Runner.xcarchive \
             -exportOptionsPlist ios/exportOptions.plist \
-            -exportPath build/ios/ipa
+            -exportPath build/ios/ipa \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Print extracted Info.plist values
         run: |
@@ -64,12 +64,16 @@ jobs:
           ./ios/Pods/FirebaseCrashlytics/upload-symbols \
             -gsp ios/Runner/GoogleService-Info.plist \
             -p ios \
-            --plist build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist \
             build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
 
-      - name: Dump UUID from dSYM
+      - name: Dump UUID from .app and dSYM
         run: |
+          echo "UUID from app:"
+          dwarfdump --uuid build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Runner
+
+          echo "UUID from dSYM:"
           dwarfdump --uuid build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
+
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
