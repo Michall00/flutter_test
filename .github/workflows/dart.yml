@@ -81,7 +81,7 @@ jobs:
           body: "This is first release"
 
       - name: Upload dSYM artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dSYM
           path: build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
