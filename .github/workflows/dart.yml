@@ -16,12 +16,16 @@ jobs:
           architecture: x64
       - run: flutter pub get
       
+      - name: Ensure Podfile with iOS 13.0
+        run: |
+          cd ios
+          if [ ! -f Podfile ]; then
+            pod init
+          fi
+          sed -i '' 's/^#\? *platform :ios.*/platform :ios, '\''13.0'\''/' Podfile || echo "platform :ios, '13.0'" >> Podfile
 
       - run: pod repo update
         working-directory: ios
-
-      - name: Set minimum iOS version to 13.0
-        run: echo "IPHONEOS_DEPLOYMENT_TARGET=13.0" >> ios/Flutter/Generated.xcconfig
 
       - run: flutter build ios --release --no-codesign
 
