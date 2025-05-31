@@ -1,14 +1,28 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:onnxruntime/onnxruntime.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_options.dart';
 import 'utils/tensor_utils.dart';
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+  runZonedGuarded(
+    () => runApp(const MyApp()),
+    (error, stackTrace) =>
+        FirebaseCrashlytics.instance.recordError(error, stackTrace),
+  );
 }
 
 final GlobalKey imageKey = GlobalKey();
@@ -457,6 +471,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                         size: Size(
                             _imageWidth!.toDouble(), _imageHeight!.toDouble()),
                       ),
+                    ),
+                    FloatingActionButton(
+                      onPressed: () {
+                        FirebaseCrashlytics.instance.crash();
+                      },
+                      heroTag: 'crash',
+                      child: const Icon(Icons.warning),
                     ),
                     Positioned(
                       top: 16,
