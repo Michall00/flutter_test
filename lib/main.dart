@@ -115,6 +115,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
   Future<void> _runSegmentationFromClick(Offset point) async {
     final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Uruchomienie segmentacji...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
     if (_imageFile == null) return;
 
     messenger.showSnackBar(
