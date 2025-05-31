@@ -37,7 +37,7 @@ jobs:
         run: |
           ./ios/Pods/FirebaseCrashlytics/upload-symbols \
             -gsp ios/Runner/GoogleService-Info.plist \
-            -p ios build/ios/iphoneos
+            -p ios build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
 
       - run: mkdir Payload
         working-directory: build/ios/iphoneos
