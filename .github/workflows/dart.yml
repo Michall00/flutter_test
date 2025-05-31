@@ -20,6 +20,9 @@ jobs:
       - run: pod repo update
         working-directory: ios
 
+      - name: Set minimum iOS version to 13.0
+        run: echo "IPHONEOS_DEPLOYMENT_TARGET=13.0" >> ios/Flutter/Generated.xcconfig
+
       - run: flutter build ios --release --no-codesign
 
       - name: Upload dSYM to Firebase Crashlytics
