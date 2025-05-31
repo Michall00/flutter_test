@@ -2,10 +2,12 @@
 
 platform :ios, '13.0'
 
-use_frameworks!
-use_modular_headers!
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), __dir__)
 
 target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
