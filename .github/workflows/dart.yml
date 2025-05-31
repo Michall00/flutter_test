@@ -44,6 +44,13 @@ jobs:
             -archivePath build/ios/archive/Runner.xcarchive \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Export IPA from archive
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            -exportOptionsPlist ios/exportOptions.plist \
+            -exportPath build/ios/ipa
+
       - name: Print extracted Info.plist values
         run: |
           /usr/libexec/PlistBuddy -c "Print CFBundleVersion" build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
@@ -64,21 +71,17 @@ jobs:
         run: |
           dwarfdump --uuid build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
 
-      - run: mkdir Payload
-        working-directory: build/ios/iphoneos
-
-      - run: mv Runner.app/ Payload
-        working-directory: build/ios/iphoneos
-
-      - name: Zip output
-        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
-        working-directory: build/ios/iphoneos
-
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0
+          file: build/ios/ipa/Runner.ipa
+          tag: v${{ github.run_number }}
           overwrite: true
           body: "This is first release"
+
+      - name: Upload dSYM artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: dSYM
+          path: build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
