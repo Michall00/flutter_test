@@ -31,7 +31,15 @@ jobs:
       - run: pod repo update
         working-directory: ios
 
-      - run: flutter build ios --release --no-codesign
+      - name: Build archive and generate dSYM
+        run: |
+          flutter build ios --release --no-codesign
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Upload dSYM to Firebase Crashlytics
         run: |
