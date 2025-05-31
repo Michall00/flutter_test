@@ -52,9 +52,9 @@ jobs:
           ./ios/Pods/FirebaseCrashlytics/upload-symbols \
             -gsp ios/Runner/GoogleService-Info.plist \
             -p ios \
-            --build-version $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist) \
-            --build-number $(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist) \
+            --plist build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist \
             build/ios/archive/Runner.xcarchive/dSYMs/Runner.app.dSYM
+
 
 
       - name: Dump UUID from dSYM
