@@ -51,10 +51,10 @@ jobs:
 
       - name: Find dSYM files
         run: find build -name "*.dSYM"
-        
+
       - name: Upload dSYM to Crashlytics
         run: |
-          dsymPath="build/ios/iphoneos/Runner.app.dSYM"
+          dsymPath="build/ios/Release-iphoneos/Runner.app.dSYM"
           if [[ ! -d ${dsymPath} ]]; then
             echo "No debug symbols were found, skip publishing to Firebase Crashlytics"
           else
