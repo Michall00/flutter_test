@@ -100,12 +100,12 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
-      final targer_size = 512;
+      const targetSize = 256;
 
       final resized = img.copyResize(
         decoded,
-        width: targer_size,
-        height: targer_size,
+        width: targetSize,
+        height: targetSize,
         interpolation: img.Interpolation.linear,
       );
 
@@ -120,13 +120,13 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
 
       setState(() {
         _imageFile = tempFile;
-        _imageWidth = targer_size;
-        _imageHeight = targer_size;
+        _imageWidth = targetSize;
+        _imageHeight = targetSize;
         _points.clear();
         _segmentationMask = null;
         _maskImage =
-            img.Image(width: targer_size, height: targer_size, numChannels: 1)
-              ..getBytes().fillRange(0, targer_size * targer_size, 255);
+            img.Image(width: targetSize, height: targetSize, numChannels: 1)
+              ..getBytes().fillRange(0, targetSize * targetSize, 255);
       });
     }
   }
