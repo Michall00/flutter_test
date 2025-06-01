@@ -51,7 +51,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/ipa/Runner.ipa
+          file: build/ios/iphoneos/FlutterIpaExport.ipa
           tag: v${{ github.run_number }}
           overwrite: true
           body: "This is first release"
