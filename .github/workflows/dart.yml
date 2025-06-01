@@ -28,15 +28,30 @@ jobs:
             sed -i '' '1s;^;platform :ios, '\''13.0'\''\n;' Podfile
           fi
 
+      - name: Check Debug Information Format
+        run: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -showBuildSettings | grep DWARF
+
       - name: Install CocoaPods
         run: |
           cd ios
           pod install
 
-      - name: Build archive and generate dSYM
-        run: |
-          flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
+      - name: Build iOS app
+        run: flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
 
+      - name: Check Debug Information Format
+        run: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -showBuildSettings | grep DWARF
+
+      - name: List build directory contents
+        run: ls -la build/ios/iphoneos
+
+      - name: Find dSYM files
+        run: find build -name "*.dSYM"
+        
       - name: Upload dSYM to Crashlytics
         run: |
           dsymPath="build/ios/iphoneos/Runner.app.dSYM"
