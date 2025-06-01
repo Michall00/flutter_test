@@ -52,6 +52,17 @@ jobs:
       - name: Find dSYM files
         run: find build -name "*.dSYM"
 
+      - name: Check UUIDs
+        run: |
+          APP_UUID=$(dwarfdump --uuid build/ios/iphoneos/Runner.app/Runner | grep '(arm64)' | grep -o 'UUID: [0-9A-F-]*' | cut -d' ' -f2)
+          DSYM_UUID=$(dwarfdump --uuid build/ios/Release-iphoneos/Runner.app.dSYM | grep '(arm64)' | grep -o 'UUID: [0-9A-F-]*' | cut -d' ' -f2)
+          if [ "$APP_UUID" = "$DSYM_UUID" ]; then
+            echo "UUIDs match: $APP_UUID"
+          else
+            echo "UUIDs do not match: APP_UUID=$APP_UUID, DSYM_UUID=$DSYM_UUID"
+            exit 1
+          fi
+
       - name: Upload dSYM to Crashlytics
         run: |
           dsymPath="build/ios/Release-iphoneos/Runner.app.dSYM"
