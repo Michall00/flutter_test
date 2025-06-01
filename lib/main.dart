@@ -100,7 +100,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
-      const targetSize = 256;
+      const targetSize = 512;
 
       final resized = img.copyResize(
         decoded,
