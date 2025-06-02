@@ -460,7 +460,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("MI-GAN Inpainting")),
+      appBar: AppBar(title: const Text("Inpainting")),
       body: _imageFile == null
           ? const Center(child: Text("Brak zdjęcia"))
           : Center(
@@ -469,14 +469,22 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                 height: _imageHeight?.toDouble(),
                 child: Stack(
                   children: [
-                    _previewMaskBytes != null
-                        ? Image.memory(_previewMaskBytes!)
-                        : Image.file(
-                            _imageFile!,
-                            key: imageKey,
-                            width: _imageWidth!.toDouble(),
-                            height: _imageHeight!.toDouble(),
-                          ),
+                    if (_previewMaskBytes != null)
+                      Image.memory(
+                        _previewMaskBytes!,
+                        key: imageKey,
+                        width: 1024,
+                        height: 1024,
+                        fit: BoxFit.fill,
+                      )
+                    else
+                      Image.file(
+                        _imageFile!,
+                        key: imageKey,
+                        width: 1024,
+                        height: 1024,
+                        fit: BoxFit.fill,
+                      ),
                     GestureDetector(
                       onTapDown: (details) {
                         if (_mode == InteractionMode.segment) {
