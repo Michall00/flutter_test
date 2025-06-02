@@ -492,7 +492,14 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                               .findRenderObject() as RenderBox;
                           final local =
                               box.globalToLocal(details.globalPosition);
-                          _runSegmentationFromClick(local);
+                          final boxSize = box.size;
+
+                          final scaleX = _imageWidth! / boxSize.width;
+                          final scaleY = _imageHeight! / boxSize.height;
+
+                          final imagePoint =
+                              Offset(local.dx * scaleX, local.dy * scaleY);
+                          _runSegmentationFromClick(imagePoint);
                         }
                       },
                       onPanUpdate: (details) {
