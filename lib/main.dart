@@ -16,6 +16,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
 
   runZonedGuarded(
@@ -227,6 +228,10 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
               [image.height.toDouble(), image.width.toDouble()]),
           [2]),
     };
+
+    final maskOutput =
+        decoderSession.run(OrtRunOptions(), decoderInputs, ['masks']);
+
     decoderSession.release();
     messenger.showSnackBar(
       const SnackBar(
@@ -237,10 +242,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     FirebaseCrashlytics.instance.log("🧠 Zakończono inferencję dekodera");
     FirebaseCrashlytics.instance.setCustomKey("mask_output_size", "512x512");
 
-    final maskOutput =
-        decoderSession.run(OrtRunOptions(), decoderInputs, ['masks']);
     final rawMask = maskOutput[0]!.value as List;
-
     final binary = <int>[];
     for (final row in rawMask[0][0] as List) {
       for (final v in row as List) {
@@ -350,15 +352,17 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     // final outputNames = ['result'];
 
     // final options = OrtRunOptions();
+    final start = DateTime.now();
     final result = session.run(
       OrtRunOptions(),
       {'image': imageTensor, 'mask': maskTensor},
       ['result'],
     );
+    final duration = DateTime.now().difference(start).inMilliseconds;
     imageTensor.release();
     maskTensor.release();
     session.release();
-
+    FirebaseCrashlytics.instance.setCustomKey("inpaint_duration_ms", duration);
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Wynik ONNX uzyskany.'),
@@ -480,13 +484,6 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                         size: Size(
                             _imageWidth!.toDouble(), _imageHeight!.toDouble()),
                       ),
-                    ),
-                    FloatingActionButton(
-                      onPressed: () {
-                        FirebaseCrashlytics.instance.crash();
-                      },
-                      heroTag: 'crash',
-                      child: const Icon(Icons.warning),
                     ),
                     Positioned(
                       top: 16,
