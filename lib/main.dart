@@ -268,6 +268,21 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       _segmentationMask = Uint8List.fromList(img.encodePng(mask));
       _maskImage = mask;
     });
+
+    final overlay = img.Image.from(image);
+    for (int y = 0; y < mask.height; y++) {
+      for (int x = 0; x < mask.width; x++) {
+        final value = mask.getPixel(x, y).getChannel(img.Channel.luminance);
+        if (value == 0) {
+          overlay.setPixelRgba(x, y, 255, 0, 0, 100);
+        }
+      }
+    }
+
+    final overlayBytes = Uint8List.fromList(img.encodePng(overlay));
+    setState(() {
+      _previewMaskBytes = overlayBytes;
+    });
   }
 
   Future<void> _runInpainting() async {
