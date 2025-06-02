@@ -18,6 +18,9 @@ Future<void> main() async {
   );
   await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  FirebaseCrashlytics.instance.log("App started");
+  FirebaseCrashlytics.instance
+      .setCustomKey("app_start_time", DateTime.now().toIso8601String());
 
   runZonedGuarded(
     () => runApp(const MyApp()),
@@ -101,7 +104,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
-      const targetSize = 512;
+      const targetSize = 1024;
 
       final resized = img.copyResize(
         decoded,
