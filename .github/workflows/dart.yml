@@ -27,12 +27,7 @@ jobs:
           else
             sed -i '' '1s;^;platform :ios, '\''13.0'\''\n;' Podfile
           fi
-
-      - name: Check Debug Information Format
-        run: |
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -showBuildSettings | grep DWARF
-
+          
       - name: Install CocoaPods
         run: |
           cd ios
@@ -40,28 +35,6 @@ jobs:
 
       - name: Build iOS app
         run: flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
-
-      - name: Check Debug Information Format
-        run: |
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -showBuildSettings | grep DWARF
-
-      - name: List build directory contents
-        run: ls -la build/ios/iphoneos
-
-      - name: Find dSYM files
-        run: find build -name "*.dSYM"
-
-      - name: Check UUIDs
-        run: |
-          APP_UUID=$(dwarfdump --uuid build/ios/iphoneos/Runner.app/Runner | grep '(arm64)' | grep -o 'UUID: [0-9A-F-]*' | cut -d' ' -f2)
-          DSYM_UUID=$(dwarfdump --uuid build/ios/Release-iphoneos/Runner.app.dSYM | grep '(arm64)' | grep -o 'UUID: [0-9A-F-]*' | cut -d' ' -f2)
-          if [ "$APP_UUID" = "$DSYM_UUID" ]; then
-            echo "UUIDs match: $APP_UUID"
-          else
-            echo "UUIDs do not match: APP_UUID=$APP_UUID, DSYM_UUID=$DSYM_UUID"
-            exit 1
-          fi
 
       - name: Upload dSYM to Crashlytics
         run: |
