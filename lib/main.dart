@@ -254,8 +254,8 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     }
 
     final mask = img.Image.fromBytes(
-      width: 512,
-      height: 512,
+      width: image.width,
+      height: image.height,
       bytes: Uint8List.fromList(binary).buffer,
       numChannels: 1,
       format: img.Format.uint8,
