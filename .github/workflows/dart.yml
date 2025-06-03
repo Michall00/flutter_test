@@ -16,6 +16,10 @@ jobs:
           architecture: x64
       - run: flutter pub get
 
+      - name: Install Firebase CLI
+        run: |
+          curl -sL https://firebase.tools | bash
+
       - name: Generate firebase_app_id_file.json
         run: |
           cat > ios/firebase_app_id_file.json <<EOF
