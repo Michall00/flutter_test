@@ -15,6 +15,26 @@ jobs:
           channel: 'stable'
           architecture: x64
       - run: flutter pub get
+
+      - name: Generate firebase_app_id_file.json
+        run: |
+          cat > ios/firebase_app_id_file.json <<EOF
+          {
+            "app_id": "${{ secrets.FIREBASE_APP_ID }}",
+            "api_key": "${{ secrets.FIREBASE_API_KEY }}",
+            "project_id": "${{ secrets.FIREBASE_PROJECT_ID }}"
+          }
+          EOF
+
+      - name: Decode GoogleService-Info.plist
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+
+      - name: Generate firebase_options.dart
+        run: |
+          dart pub global activate flutterfire_cli
+          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
+          flutterfire configure --project=${{ secrets.FIREBASE_PROJECT_ID }} --platforms=ios --out=lib/firebase_options.dart --yes
       
       - name: Ensure Podfile with iOS 13.0
         run: |
