@@ -8,6 +8,7 @@ import '../../services/image_service.dart';
 import '../../services/inpainting_service.dart';
 import '../../services/segmentation_service.dart';
 import '../../utils/image_utils.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class InpaintingPage extends StatefulWidget {
   const InpaintingPage({super.key});
@@ -86,6 +87,28 @@ class _InpaintingPageState extends State<InpaintingPage> {
     });
   }
 
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
+      if (pickedFile == null) return;
+
+      final file = File(pickedFile.path);
+
+      setState(() {
+        _imageFile = file;
+        _maskImage = null;
+        _previewMaskBytes = null;
+        _points.clear();
+      });
+
+      FirebaseCrashlytics.instance.log("Image picked from camera");
+    } catch (e, s) {
+      FirebaseCrashlytics.instance.recordError(e, s);
+    }
+  }
+
   Future<void> _runInpainting() async {
     if (_imageFile == null || _maskImage == null) return;
 
@@ -98,7 +121,7 @@ class _InpaintingPageState extends State<InpaintingPage> {
 
     final modelData = await rootBundle.load('assets/migan.onnx');
 
-    final dilated = dilateMask(_maskImage!, radius: 5);
+    final dilated = dilateMask(_maskImage!, radius: 20);
 
     final output = await InpaintingService.runInpainting(
       original: originalImage,
@@ -186,6 +209,13 @@ class _InpaintingPageState extends State<InpaintingPage> {
             onPressed: _pickImage,
             heroTag: 'pick',
             child: const Icon(Icons.photo_library),
+          ),
+          const SizedBox(width: 16),
+          FloatingActionButton(
+            onPressed: _pickImageFromCamera,
+            heroTag: 'camera',
+            tooltip: 'Zrób zdjęcie',
+            child: const Icon(Icons.camera_alt),
           ),
           const SizedBox(width: 16),
           FloatingActionButton(
