@@ -98,24 +98,32 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
+      const targetSize = 1024;
 
-      final resultBytes = Uint8List.fromList(img.encodePng(decoded));
+      final resized = img.copyResize(
+        decoded,
+        width: targetSize,
+        height: targetSize,
+        interpolation: img.Interpolation.linear,
+      );
+
+      final resultBytes = Uint8List.fromList(img.encodePng(resized));
       final tempFile = await File(
               '${(await Directory.systemTemp.createTemp()).path}/input.png')
           .writeAsBytes(resultBytes);
 
       FirebaseCrashlytics.instance.log("Obraz wybrany przez użytkownika");
       FirebaseCrashlytics.instance.setCustomKey(
-          "image_resolution", "${decoded.width}x${decoded.height}");
+          "image_resolution", "${resized.width}x${resized.height}");
 
       setState(() {
         _imageFile = tempFile;
-        _imageWidth = decoded.width;
-        _imageHeight = decoded.height;
+        _imageWidth = resized.width;
+        _imageHeight = resized.height;
         _segmentationMask = null;
         _maskImage = img.Image(
-            width: decoded.width, height: decoded.height, numChannels: 1)
-          ..getBytes().fillRange(0, decoded.width * decoded.height, 255);
+            width: resized.width, height: resized.height, numChannels: 1)
+          ..getBytes().fillRange(0, resized.width * resized.height, 255);
       });
     }
   }
