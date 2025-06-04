@@ -165,116 +165,140 @@ class _InpaintingPageState extends State<InpaintingPage> {
     });
   }
 
+  Widget _buildImageStack() {
+    final width = _imageWidth?.toDouble() ?? 256;
+    final height = _imageHeight?.toDouble() ?? 256;
+
+    return Center(
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _previewMaskBytes != null
+                ? Image.memory(
+                    _previewMaskBytes!,
+                    key: _imageKey,
+                    fit: BoxFit.contain,
+                  )
+                : Image.file(
+                    _imageFile!,
+                    key: _imageKey,
+                    fit: BoxFit.contain,
+                  ),
+            GestureDetector(
+              onTapDown: (details) {
+                if (_mode == InteractionMode.segment) {
+                  final box =
+                      _imageKey.currentContext!.findRenderObject() as RenderBox;
+                  final local = box.globalToLocal(details.globalPosition);
+                  final boxSize = box.size;
+                  final scaleX = _imageWidth! / boxSize.width;
+                  final scaleY = _imageHeight! / boxSize.height;
+                  final imagePoint =
+                      Offset(local.dx * scaleX, local.dy * scaleY);
+                  _runSegmentationFromClick(imagePoint);
+                }
+              },
+              onPanUpdate: (details) {
+                if (_mode == InteractionMode.draw) {
+                  final local = details.localPosition;
+                  final x = local.dx.toInt().clamp(0, _maskImage!.width - 1);
+                  final y = local.dy.toInt().clamp(0, _maskImage!.height - 1);
+                  _maskImage!.setPixelRgba(x, y, 0, 0, 0, 255);
+                  setState(() => _points.add(local));
+                }
+              },
+              onPanEnd: (_) {
+                if (_mode == InteractionMode.draw) {
+                  _points.add(Offset.infinite);
+                }
+              },
+              child: CustomPaint(
+                painter: MaskPainter(_points),
+                size: Size(width, height),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingButtons() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FloatingActionButton(
+          onPressed: _pickImage,
+          heroTag: 'pick',
+          child: const Icon(Icons.photo_library),
+        ),
+        const SizedBox(width: 16),
+        FloatingActionButton(
+          onPressed: _pickImageFromCamera,
+          heroTag: 'camera',
+          tooltip: 'Zrób zdjęcie',
+          child: const Icon(Icons.camera_alt),
+        ),
+        const SizedBox(width: 16),
+        FloatingActionButton(
+          onPressed: _runInpainting,
+          heroTag: 'inpaint',
+          child: const Icon(Icons.auto_fix_high),
+        ),
+        const SizedBox(width: 16),
+        FloatingActionButton(
+          onPressed: _outputBytes == null
+              ? null
+              : () => _saveImageToGallery(_outputBytes!),
+          heroTag: 'save',
+          tooltip: 'Zapisz do galerii',
+          child: const Icon(Icons.save_alt),
+        ),
+        const SizedBox(width: 16),
+        FloatingActionButton(
+          onPressed: () {
+            setState(() {
+              _mode = _mode == InteractionMode.draw
+                  ? InteractionMode.segment
+                  : InteractionMode.draw;
+            });
+          },
+          heroTag: 'mode',
+          child: Icon(
+              _mode == InteractionMode.draw ? Icons.brush : Icons.touch_app),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Inpainting")),
-      body: _outputBytes != null
-          ? Center(child: Image.memory(_outputBytes!))
-          : _imageFile == null
-              ? const Center(child: Text("Brak zdjęcia"))
-              : Center(
-                  child: SizedBox(
-                    width: _imageWidth?.toDouble(),
-                    height: _imageHeight?.toDouble(),
-                    child: Stack(
-                      children: [
-                        if (_previewMaskBytes != null)
-                          Image.memory(_previewMaskBytes!, key: _imageKey)
-                        else
-                          Image.file(_imageFile!, key: _imageKey),
-                        GestureDetector(
-                          onTapDown: (details) {
-                            if (_mode == InteractionMode.segment) {
-                              final box = _imageKey.currentContext!
-                                  .findRenderObject() as RenderBox;
-                              final local =
-                                  box.globalToLocal(details.globalPosition);
-                              final boxSize = box.size;
-
-                              final scaleX = _imageWidth! / boxSize.width;
-                              final scaleY = _imageHeight! / boxSize.height;
-
-                              final imagePoint =
-                                  Offset(local.dx * scaleX, local.dy * scaleY);
-                              _runSegmentationFromClick(imagePoint);
-                            }
-                          },
-                          onPanUpdate: (details) {
-                            if (_mode == InteractionMode.draw) {
-                              final local = details.localPosition;
-                              final x = local.dx
-                                  .toInt()
-                                  .clamp(0, _maskImage!.width - 1);
-                              final y = local.dy
-                                  .toInt()
-                                  .clamp(0, _maskImage!.height - 1);
-                              _maskImage!.setPixelRgba(x, y, 0, 0, 0, 255);
-                              setState(() => _points.add(local));
-                            }
-                          },
-                          onPanEnd: (_) {
-                            if (_mode == InteractionMode.draw) {
-                              _points.add(Offset.infinite);
-                            }
-                          },
-                          child: CustomPaint(
-                            painter: MaskPainter(_points),
-                            size: Size(_imageWidth!.toDouble(),
-                                _imageHeight!.toDouble()),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          FloatingActionButton(
-            onPressed: _pickImage,
-            heroTag: 'pick',
-            child: const Icon(Icons.photo_library),
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            onPressed: _pickImageFromCamera,
-            heroTag: 'camera',
-            tooltip: 'Zrób zdjęcie',
-            child: const Icon(Icons.camera_alt),
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            onPressed: _runInpainting,
-            heroTag: 'inpaint',
-            child: const Icon(Icons.auto_fix_high),
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            onPressed: _outputBytes == null
-                ? null
-                : () => _saveImageToGallery(_outputBytes!),
-            heroTag: 'save',
-            tooltip: 'Zapisz do galerii',
-            child: const Icon(Icons.save_alt),
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            onPressed: () {
-              setState(() {
-                _mode = _mode == InteractionMode.draw
-                    ? InteractionMode.segment
-                    : InteractionMode.draw;
-              });
-            },
-            heroTag: 'mode',
-            child: Icon(
-                _mode == InteractionMode.draw ? Icons.brush : Icons.touch_app),
-          ),
-        ],
+      body: Builder(
+        builder: (_) {
+          if (_outputBytes != null) {
+            return Center(
+              child: Image.memory(
+                _outputBytes!,
+                width: _imageWidth?.toDouble(),
+                height: _imageHeight?.toDouble(),
+                fit: BoxFit.contain,
+              ),
+            );
+          }
+          if (_imageFile == null) {
+            return const Center(child: Text("Brak zdjęcia"));
+          }
+          return _buildImageStack();
+        },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _buildFloatingButtons(),
     );
   }
 }
