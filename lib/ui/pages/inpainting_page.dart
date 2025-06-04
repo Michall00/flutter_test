@@ -9,6 +9,8 @@ import '../../services/inpainting_service.dart';
 import '../../services/segmentation_service.dart';
 import '../../utils/image_utils.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class InpaintingPage extends StatefulWidget {
   const InpaintingPage({super.key});
@@ -54,6 +56,54 @@ class _InpaintingPageState extends State<InpaintingPage> {
     });
   }
 
+  Future<void> _saveImageToGallery(Uint8List imageBytes) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        FirebaseCrashlytics.instance.log("Gallery permission denied");
+        return;
+      }
+
+      final result = await ImageGallerySaver.saveImage(
+        imageBytes,
+        quality: 100,
+        name: "inpainted_${DateTime.now().millisecondsSinceEpoch}.png",
+      );
+      if (result['isSuccess']) {
+        FirebaseCrashlytics.instance.log("Image saved to gallery");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Zapisano obraz do galerii')),
+        );
+      } else {
+        FirebaseCrashlytics.instance.log("Image not saved");
+      }
+    } catch (e, s) {
+      FirebaseCrashlytics.instance.recordError(e, s);
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
+      if (pickedFile == null) return;
+
+      final file = File(pickedFile.path);
+
+      setState(() {
+        _imageFile = file;
+        _maskImage = null;
+        _previewMaskBytes = null;
+        _points.clear();
+      });
+
+      FirebaseCrashlytics.instance.log("Image picked from camera");
+    } catch (e, s) {
+      FirebaseCrashlytics.instance.recordError(e, s);
+    }
+  }
+
   Future<void> _runSegmentationFromClick(Offset point) async {
     if (_imageFile == null) return;
     final encoderData = await rootBundle.load('assets/encoder.onnx');
@@ -85,28 +135,6 @@ class _InpaintingPageState extends State<InpaintingPage> {
       _maskImage = decodedMask;
       _previewMaskBytes = Uint8List.fromList(img.encodePng(overlay));
     });
-  }
-
-  Future<void> _pickImageFromCamera() async {
-    try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.camera);
-
-      if (pickedFile == null) return;
-
-      final file = File(pickedFile.path);
-
-      setState(() {
-        _imageFile = file;
-        _maskImage = null;
-        _previewMaskBytes = null;
-        _points.clear();
-      });
-
-      FirebaseCrashlytics.instance.log("Image picked from camera");
-    } catch (e, s) {
-      FirebaseCrashlytics.instance.recordError(e, s);
-    }
   }
 
   Future<void> _runInpainting() async {
@@ -222,6 +250,15 @@ class _InpaintingPageState extends State<InpaintingPage> {
             onPressed: _runInpainting,
             heroTag: 'inpaint',
             child: const Icon(Icons.auto_fix_high),
+          ),
+          const SizedBox(width: 16),
+          FloatingActionButton(
+            onPressed: _outputBytes == null
+                ? null
+                : () => _saveImageToGallery(_outputBytes!),
+            heroTag: 'save',
+            tooltip: 'Zapisz do galerii',
+            child: const Icon(Icons.save_alt),
           ),
           const SizedBox(width: 16),
           FloatingActionButton(

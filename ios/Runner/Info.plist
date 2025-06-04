@@ -49,5 +49,7 @@
 		<string>Potrzebujemy dostępu do galerii, aby wybrać zdjęcie.</string>
 	<key>NSCameraUsageDescription</key>
 		<string>Aby zrobić zdjęcie</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>App potrzebuje dostępu do zapisania obrazu w galerii.</string>
 </dict>
 </plist>
