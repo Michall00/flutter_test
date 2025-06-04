@@ -3,11 +3,11 @@ name: iOS-ipa-build
 on:
   push:
     branches:
-      - main
+      - master
       - develop
   pull_request:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
