@@ -58,6 +58,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   int? _imageWidth;
   int? _imageHeight;
   Uint8List? _segmentationMask;
+  Uint8List? _previewMaskBytes;
 
   void _startInpaintingWithSnackBar() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -98,32 +99,24 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
         );
         return;
       }
-      const targetSize = 1024;
 
-      final resized = img.copyResize(
-        decoded,
-        width: targetSize,
-        height: targetSize,
-        interpolation: img.Interpolation.linear,
-      );
-
-      final resultBytes = Uint8List.fromList(img.encodePng(resized));
+      final resultBytes = Uint8List.fromList(img.encodePng(decoded));
       final tempFile = await File(
               '${(await Directory.systemTemp.createTemp()).path}/input.png')
           .writeAsBytes(resultBytes);
 
       FirebaseCrashlytics.instance.log("Obraz wybrany przez użytkownika");
       FirebaseCrashlytics.instance.setCustomKey(
-          "image_resolution", "${resized.width}x${resized.height}");
+          "image_resolution", "${decoded.width}x${decoded.height}");
 
       setState(() {
         _imageFile = tempFile;
-        _imageWidth = resized.width;
-        _imageHeight = resized.height;
+        _imageWidth = decoded.width;
+        _imageHeight = decoded.height;
         _segmentationMask = null;
         _maskImage = img.Image(
-            width: resized.width, height: resized.height, numChannels: 1)
-          ..getBytes().fillRange(0, resized.width * resized.height, 255);
+            width: decoded.width, height: decoded.height, numChannels: 1)
+          ..getBytes().fillRange(0, decoded.width * decoded.height, 255);
       });
     }
   }
@@ -279,7 +272,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
     setState(() {
       _segmentationMask = Uint8List.fromList(img.encodePng(mask));
       _maskImage = mask;
-      _imageFile = File.fromRawPath(overlayBytes);
+      _previewMaskBytes = overlayBytes;
     });
   }
 
@@ -306,12 +299,23 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
                 child: SizedBox(
                   width: _imageWidth?.toDouble(),
                   height: _imageHeight?.toDouble(),
-                  child: Image.file(
-                    _imageFile!,
-                    key: imageKey,
-                    width: 1024,
-                    height: 1024,
-                    fit: BoxFit.fill,
+                  child: Stack(
+                    children: [
+                      Image.file(
+                        _imageFile!,
+                        key: imageKey,
+                        width: 1024,
+                        height: 1024,
+                        fit: BoxFit.fill,
+                      ),
+                      if (_previewMaskBytes != null)
+                        Image.memory(
+                          _previewMaskBytes!,
+                          width: 1024,
+                          height: 1024,
+                          fit: BoxFit.fill,
+                        ),
+                    ],
                   ),
                 ),
               ),
