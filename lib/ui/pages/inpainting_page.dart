@@ -1,13 +1,12 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
-import 'package:image_picker/image_picker.dart';
 import '../widgets/mask_painter.dart';
 import '../../services/image_service.dart';
 import '../../services/inpainting_service.dart';
 import '../../services/segmentation_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class InpaintingPage extends StatefulWidget {
   const InpaintingPage({super.key});
@@ -48,13 +47,24 @@ class _InpaintingPageState extends State<InpaintingPage> {
 
   Future<void> _runInpainting() async {
     if (_imageFile == null || _maskImage == null) return;
+
+    final inverted = img.Image.from(_maskImage!);
+    for (int y = 0; y < inverted.height; y++) {
+      for (int x = 0; x < inverted.width; x++) {
+        final pixel = inverted.getPixel(x, y);
+        final v = pixel.r;
+        final inv = 255 - v;
+        inverted.setPixelRgba(x, y, inv, inv, inv, 255);
+      }
+    }
+
     final imageBytes = await _imageFile!.readAsBytes();
     final decoded = img.decodeImage(imageBytes)!;
     final modelData = await rootBundle.load('assets/migan.onnx');
 
     final output = await InpaintingService.runInpainting(
       original: decoded,
-      mask: _maskImage!,
+      mask: inverted,
       modelData: modelData,
     );
 
@@ -84,66 +94,85 @@ class _InpaintingPageState extends State<InpaintingPage> {
       body: _imageFile == null
           ? const Center(child: Text("Brak zdjęcia"))
           : Center(
-              child: Stack(
-                children: [
-                  if (_outputBytes != null)
-                    Image.memory(_outputBytes!, key: _imageKey)
-                  else if (_maskBytes != null)
-                    Image.memory(_maskBytes!, key: _imageKey)
-                  else
-                    Image.file(_imageFile!, key: _imageKey),
-                  GestureDetector(
-                    onTapDown: (details) {
-                      if (_mode == InteractionMode.segment) {
-                        final box = _imageKey.currentContext!.findRenderObject()
-                            as RenderBox;
-                        final local = box.globalToLocal(details.globalPosition);
-                        _runSegmentation(local);
-                      }
-                    },
-                    onPanUpdate: (details) {
-                      if (_mode == InteractionMode.draw) {
-                        setState(() => _points.add(details.localPosition));
-                      }
-                    },
-                    onPanEnd: (_) {
-                      if (_mode == InteractionMode.draw) {
-                        _points.add(Offset.infinite);
-                      }
-                    },
-                    child: CustomPaint(
-                      painter: MaskPainter(_points),
-                      size: Size.infinite,
-                    ),
-                  )
-                ],
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  key: _imageKey,
+                  width: 1024,
+                  height: 1024,
+                  child: Stack(
+                    children: [
+                      if (_outputBytes != null)
+                        Image.memory(_outputBytes!)
+                      else
+                        Image.file(_imageFile!),
+                      if (_maskBytes != null)
+                        Image.memory(
+                          _maskBytes!,
+                          color: Colors.red.withOpacity(0.4),
+                          colorBlendMode: BlendMode.srcATop,
+                        ),
+                      GestureDetector(
+                        onTapDown: (details) {
+                          if (_mode == InteractionMode.segment) {
+                            final box = _imageKey.currentContext!
+                                .findRenderObject() as RenderBox;
+                            final local =
+                                box.globalToLocal(details.globalPosition);
+                            _runSegmentation(local);
+                          }
+                        },
+                        onPanUpdate: (details) {
+                          if (_mode == InteractionMode.draw) {
+                            setState(() => _points.add(details.localPosition));
+                          }
+                        },
+                        onPanEnd: (_) {
+                          if (_mode == InteractionMode.draw) {
+                            _points.add(Offset.infinite);
+                          }
+                        },
+                        child: CustomPaint(
+                          painter: MaskPainter(_points),
+                          size: const Size(1024, 1024),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
               ),
             ),
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
+      floatingActionButton: Center(
+        heightFactor: 1,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
               onPressed: _pickImage,
               heroTag: 'pick',
-              child: const Icon(Icons.photo)),
-          const SizedBox(width: 16),
-          FloatingActionButton(
+              child: const Icon(Icons.photo),
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
               onPressed: _runInpainting,
               heroTag: 'inpaint',
-              child: const Icon(Icons.brush)),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            onPressed: () {
-              setState(() => _mode = _mode == InteractionMode.draw
-                  ? InteractionMode.segment
-                  : InteractionMode.draw);
-            },
-            heroTag: 'mode',
-            child: Icon(
-                _mode == InteractionMode.draw ? Icons.edit : Icons.crop_free),
-          )
-        ],
+              child: const Icon(Icons.auto_fix_high),
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
+              onPressed: () {
+                setState(() => _mode = _mode == InteractionMode.draw
+                    ? InteractionMode.segment
+                    : InteractionMode.draw);
+              },
+              heroTag: 'mode',
+              child: Icon(
+                  _mode == InteractionMode.draw ? Icons.edit : Icons.crop_free),
+            ),
+          ],
+        ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
