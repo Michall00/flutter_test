@@ -58,7 +58,7 @@ class _InpaintingPageState extends State<InpaintingPage> {
 
   Future<void> _saveImageToGallery(Uint8List imageBytes) async {
     try {
-      final status = await Permission.storage.request();
+      final status = await Permission.photosAddOnly.request();
       if (!status.isGranted) {
         FirebaseCrashlytics.instance.log("Gallery permission denied");
         return;
