@@ -39,7 +39,9 @@ jobs:
           dart pub global activate flutterfire_cli
           echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
           flutterfire configure --project=${{ secrets.FIREBASE_PROJECT_ID }} --platforms=ios --out=lib/firebase_options.dart --yes
-      
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}  
+
       - name: Ensure Podfile with iOS 13.0
         run: |
           cd ios
