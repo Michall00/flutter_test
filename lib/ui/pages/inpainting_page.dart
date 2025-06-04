@@ -7,6 +7,7 @@ import '../widgets/mask_painter.dart';
 import '../../services/image_service.dart';
 import '../../services/inpainting_service.dart';
 import '../../services/segmentation_service.dart';
+import '../../utils/image_utils.dart';
 
 class InpaintingPage extends StatefulWidget {
   const InpaintingPage({super.key});
@@ -97,9 +98,11 @@ class _InpaintingPageState extends State<InpaintingPage> {
 
     final modelData = await rootBundle.load('assets/migan.onnx');
 
+    final dilated = dilateMask(_maskImage!, radius: 5);
+
     final output = await InpaintingService.runInpainting(
       original: originalImage,
-      mask: _maskImage!,
+      mask: dilated,
       modelData: modelData,
     );
 
