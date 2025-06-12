@@ -96,15 +96,34 @@ class _InpaintingPageState extends State<InpaintingPage> {
       if (pickedFile == null) return;
 
       final file = File(pickedFile.path);
+      final resized = await ImageService.decodeAndResize(file, 1024);
+      if (resized == null) return;
+
+      final resultBytes = Uint8List.fromList(img.encodePng(resized));
+      final tempFile =
+          await ImageService.saveTempImage(resultBytes, 'input.png');
 
       setState(() {
-        _imageFile = file;
-        _maskImage = null;
-        _previewMaskBytes = null;
+        _imageFile = tempFile;
+        _imageWidth = resized.width;
+        _imageHeight = resized.height;
         _points.clear();
+        _segmentationMask = null;
+        _previewMaskBytes = null;
+        _maskImage = img.Image(
+            width: resized.width, height: resized.height, numChannels: 1)
+          ..getBytes().fillRange(0, resized.width * resized.height, 255);
       });
 
       FirebaseCrashlytics.instance.log("Image picked from camera");
+      FirebaseAnalytics.instance.logEvent(
+        name: 'image_picked',
+        parameters: {
+          'width': _imageWidth!,
+          'height': _imageHeight!,
+          'source': 'camera',
+        },
+      );
     } catch (e, s) {
       FirebaseCrashlytics.instance.recordError(e, s);
     }
