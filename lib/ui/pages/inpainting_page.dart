@@ -66,34 +66,54 @@ class _InpaintingPageState extends State<InpaintingPage> {
   }
 
   Future<void> _saveImageToGallery(Uint8List imageBytes) async {
-    try {
-      final status = await Permission.photosAddOnly.request();
-      if (!status.isGranted) {
-        FirebaseCrashlytics.instance.log("Gallery permission denied");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Brak uprawnień do zapisu w galerii')),
-        );
-        return;
-      }
+    // try {
+    //   final status = await Permission.photosAddOnly.request();
+    //   if (!status.isGranted) {
+    //     FirebaseCrashlytics.instance.log("Gallery permission denied");
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(content: Text('Brak uprawnień do zapisu w galerii')),
+    //     );
+    //     return;
+    //   }
 
+    //   final result = await ImageGallerySaver.saveImage(
+    //     imageBytes,
+    //     quality: 100,
+    //     name: "inpainted_${DateTime.now().millisecondsSinceEpoch}.png",
+    //   );
+    //   if (result['isSuccess'] == true) {
+    //     FirebaseCrashlytics.instance.log("Image saved to gallery");
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(content: Text('Zapisano obraz do galerii')),
+    //     );
+    //   } else {
+    //     FirebaseCrashlytics.instance.log("Image not saved");
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(content: Text('Nie udało się zapisać obrazu')),
+    //     );
+    //   }
+    // } catch (e, s) {
+    //   FirebaseCrashlytics.instance.recordError(e, s);
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text('Błąd zapisu: $e')),
+    //   );
+    // }
+    try {
       final result = await ImageGallerySaver.saveImage(
         imageBytes,
         quality: 100,
         name: "inpainted_${DateTime.now().millisecondsSinceEpoch}.png",
       );
       if (result['isSuccess'] == true) {
-        FirebaseCrashlytics.instance.log("Image saved to gallery");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Zapisano obraz do galerii')),
         );
       } else {
-        FirebaseCrashlytics.instance.log("Image not saved");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Nie udało się zapisać obrazu')),
         );
       }
-    } catch (e, s) {
-      FirebaseCrashlytics.instance.recordError(e, s);
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Błąd zapisu: $e')),
       );
