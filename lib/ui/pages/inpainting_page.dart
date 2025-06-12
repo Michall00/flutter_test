@@ -11,6 +11,7 @@ import '../../utils/image_utils.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 class InpaintingPage extends StatefulWidget {
   const InpaintingPage({super.key});
@@ -54,6 +55,14 @@ class _InpaintingPageState extends State<InpaintingPage> {
           width: resized.width, height: resized.height, numChannels: 1)
         ..getBytes().fillRange(0, resized.width * resized.height, 255);
     });
+    FirebaseAnalytics.instance.logEvent(
+      name: 'image_picked',
+      parameters: {
+        'width': _imageWidth!,
+        'height': _imageHeight!,
+        'source': 'gallery',
+      },
+    );
   }
 
   Future<void> _saveImageToGallery(Uint8List imageBytes) async {
@@ -109,11 +118,31 @@ class _InpaintingPageState extends State<InpaintingPage> {
     final encoderData = await rootBundle.load('assets/encoder.onnx');
     final decoderData = await rootBundle.load('assets/decoder.onnx');
 
+    final segmentationStart = DateTime.now();
+    FirebaseAnalytics.instance.logEvent(
+      name: 'segmentation_started',
+      parameters: {
+        'x': point.dx,
+        'y': point.dy,
+      },
+    );
+
     final mask = await SegmentationService.runSegmentation(
       imageFile: _imageFile!,
       clickPoint: point,
       encoderData: encoderData,
       decoderData: decoderData,
+    );
+
+    final segmentationEnd = DateTime.now();
+    final durationMs =
+        segmentationEnd.difference(segmentationStart).inMilliseconds;
+
+    FirebaseAnalytics.instance.logEvent(
+      name: 'segmentation_completed',
+      parameters: {
+        'duration_ms': durationMs,
+      },
     );
 
     final imageBytes = await _imageFile!.readAsBytes();
@@ -140,6 +169,15 @@ class _InpaintingPageState extends State<InpaintingPage> {
   Future<void> _runInpainting() async {
     if (_imageFile == null || _maskImage == null) return;
 
+    final inpaintingStart = DateTime.now();
+    FirebaseAnalytics.instance.logEvent(
+      name: 'inpainting_started',
+      parameters: {
+        'width': _imageWidth!,
+        'height': _imageHeight!,
+      },
+    );
+
     final bytes = await _imageFile!.readAsBytes();
     final originalImage = img.decodeImage(bytes)!;
 
@@ -155,6 +193,16 @@ class _InpaintingPageState extends State<InpaintingPage> {
       original: originalImage,
       mask: dilated,
       modelData: modelData,
+    );
+
+    final inpaintingEnd = DateTime.now();
+    final durationMs = inpaintingEnd.difference(inpaintingStart).inMilliseconds;
+
+    FirebaseAnalytics.instance.logEvent(
+      name: 'inpainting_completed',
+      parameters: {
+        'duration_ms': durationMs,
+      },
     );
 
     setState(() {
